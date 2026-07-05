@@ -1,0 +1,6 @@
+com.renesas.common.debug.ui.memory.renderingFormat=com.renesas.common.debug.ui.images.YCbCr422RawImageFormatY0CbY1Cr
+com.renesas.common.debug.ui.memory.renderingHeight=160
+com.renesas.common.debug.ui.memory.renderingPosition=0
+com.renesas.common.debug.ui.memory.renderingScanlinePad=4
+com.renesas.common.debug.ui.memory.renderingWidth=160
+eclipse.preferences.version=1
