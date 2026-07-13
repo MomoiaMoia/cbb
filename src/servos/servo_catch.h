@@ -4,7 +4,7 @@
  *
  * Gripper specs:
  *   PWM range:    500 ~ 2500 µsec
- *   Open:         1000 µs
+ *   Open:         1100 µs
  *   Close:        1800 µs
  *   Frequency:    50 Hz (20 ms period)
  **********************************************************************************************************************/
@@ -16,14 +16,14 @@
 
 /**
  * Initialize the gripper.
- * Opens GPT6 timer, sets open position (1000 µs), and starts PWM output.
+ * Opens GPT6 timer, sets open position (1100 µs), and starts PWM output.
  * @return FSP_SUCCESS on success, or error code.
  */
 fsp_err_t servo_catch_init(void);
 
 /**
  * Open the gripper (张开).
- * Fixed at 1000 µs.
+ * Fixed at 1100 µs.
  * @return FSP_SUCCESS on success.
  */
 fsp_err_t servo_catch_open(void);
@@ -44,7 +44,7 @@ fsp_err_t servo_catch_close(void);
 
 /**
  * Close the gripper gradually (缓慢闭合).
- * Ramps from open (1000 µs) to close (1800 µs) in small steps
+ * Ramps from open (1100 µs) to close (1800 µs) in small steps
  * over the specified duration.
  * @param[in] duration_ms  Total time for the closing motion (ms).
  */

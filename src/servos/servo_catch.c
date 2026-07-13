@@ -10,8 +10,8 @@
  *
  * Calibration:
  *    500 µs — one direction limit
- *   1000 µs — open (张开)
- *   1800 µs — close (闭合)
+ *   1400 µs — open (张开)
+ *   2000 µs — close (闭合)
  *   2500 µs — other direction limit
  **********************************************************************************************************************/
 #include "servo_catch.h"
@@ -86,7 +86,7 @@ fsp_err_t servo_catch_set_pulse(uint32_t pulse_us)
 /*******************************************************************************************************************//**
  * Open the gripper (张开).
  *
- * Fixed at 1400 µs.
+ * Fixed at 1100 µs.
  *
  * @retval FSP_SUCCESS  Gripper opened.
  **********************************************************************************************************************/
@@ -100,13 +100,13 @@ fsp_err_t servo_catch_open(void)
 /*******************************************************************************************************************//**
  * Close the gripper (闭合).
  *
- * Fixed at 1800 µs.
+ * Fixed at 2000 µs.
  *
  * @retval FSP_SUCCESS  Gripper closed.
  **********************************************************************************************************************/
 fsp_err_t servo_catch_close(void)
 {
-    servo_catch_set_pulse(1800);
+    servo_catch_set_pulse(2000);
 
     return FSP_SUCCESS;
 }
@@ -114,14 +114,14 @@ fsp_err_t servo_catch_close(void)
 /*******************************************************************************************************************//**
  * Close the gripper gradually (缓慢闭合).
  *
- * Ramps from 1400 µs to 1800 µs in 50 µs steps.
+ * Ramps from 1400 µs to 2000 µs in 50 µs steps.
  *
  * @param[in] duration_ms  Total time for the closing motion (ms).
  **********************************************************************************************************************/
 void servo_catch_close_slow(uint32_t duration_ms)
 {
     const uint32_t start_us = 1400;
-    const uint32_t end_us   = 1800;
+    const uint32_t end_us   = 2000;
     const uint32_t step_us  = 50;
     uint32_t steps = (end_us - start_us) / step_us;
     uint32_t step_delay = duration_ms / steps;

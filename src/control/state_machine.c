@@ -1,23 +1,23 @@
-/*******************************************************************************************************************/ /**
-                                                                                                                       * @file    state_machine.c
-                                                                                                                       * @brief   Blueberry-picking state machine implementation
-                                                                                                                       *
-                                                                                                                       * Physical layout (confirmed by user):
-                                                                                                                       *   Servo0  — base rotation (270° pan)        -135 … +135, neutral 0°
-                                                                                                                       *   Servo1  — shoulder joint (180°)             0 … 180, neutral 90°
-                                                                                                                       *             0° / 180° = horizontal,  90° = vertical
-                                                                                                                       *   Servo2  — elbow / camera tilt (180°)        0 … 180, neutral 90°
-                                                                                                                       *             Mounted on servo1; camera on servo2.
-                                                                                                                       *             When servo1 = 90° (vertical),
-                                                                                                                       *               0° = camera down,  90° = forward,  180° = up
-                                                                                                                       *
-                                                                                                                       * Centering:
-                                                                                                                       *   cx offset  →  servo0 (pan)     delta_pan  =  off_x * kp_pan
-                                                                                                                       *   cy offset  →  servo2 (tilt)    delta_tilt = -off_y * kp_tilt
-                                                                                                                       *
-                                                                                                                       * NOTE: cx, cy are in pixel coords within the 160x160 image.
-                                                                                                                       *       Targets defined at top of file (CX_TARGET, CY_TARGET).
-                                                                                                                       **********************************************************************************************************************/
+/**
+ * @file    state_machine.c
+ * @brief   Blueberry-picking state machine implementation
+ *
+ * Physical layout (confirmed by user):
+ *   Servo0  — base rotation (270° pan)        -135 … +135, neutral 0°
+ *   Servo1  — shoulder joint (180°)             0 … 180, neutral 90°
+ *             0° / 180° = horizontal,  90° = vertical
+ *   Servo2  — elbow / camera tilt (180°)        0 … 180, neutral 90°
+ *             Mounted on servo1; camera on servo2.
+ *             When servo1 = 90° (vertical),
+ *               0° = camera down,  90° = forward,  180° = up
+ *
+ * Centering:
+ *   cx offset  →  servo0 (pan)     delta_pan  = off_x * kp_pan
+ *   cy offset  →  servo2 (tilt)    delta_tilt = -off_y * kp_tilt
+ *
+ * NOTE: cx, cy are in pixel coords within the 160x160 image.
+ *       Targets defined at top of file (CX_TARGET, CY_TARGET).
+ **********************************************************************************************************************/
 #include "state_machine.h"
 
 #include "common_utils.h"
@@ -49,11 +49,11 @@
 /* ------------------------------------------------------------------ */
 /*  P-controller gains & deadband                                      */
 /* ------------------------------------------------------------------ */
-#define KP_PAN 0.15f
-#define KP_TILT 0.50f
+#define KP_PAN 0.20f
+#define KP_TILT 0.20f
 #define DEADBAND_X 16.0f
 #define DEADBAND_Y 16.0f
-#define MIN_DET_W 5.0f
+#define MIN_DET_W 10.0f
 
 /* ------------------------------------------------------------------ */
 /*  Local helpers                                                      */
@@ -231,6 +231,7 @@ void StateMachine_Init(StateMachine *sm) {
     sm->confirm_anchor_cx = 0.0f;
     sm->confirm_anchor_cy = 0.0f;
     sm->confirm_anchor_score = 0.0f;
+    sm->confirm_anchor_width = 0.0f;
     sm->confirm_frame_count = 0;
     sm->confirm_success_count = 0;
     sm->calib_buf_idx = 0;
@@ -256,6 +257,9 @@ void StateMachine_Init(StateMachine *sm) {
      * Each pixel ≈ 0.5625° (90° FOV / 160px)
      * kp=0.15 → 10px偏差移0.15°
      */
+    /* TOF — default to no-data sentinel */
+    sm->tof_distance_mm = 8192;
+
     sm->kp_pan = KP_PAN;
     sm->kp_tilt = KP_TILT;
     sm->deadband_x = DEADBAND_X;
@@ -277,6 +281,28 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
         sm->cur_servo1 = 90;
         smooth_move_servo2(sm->cur_servo2, 90, NORMAL_STEP_MS);
         sm->cur_servo2 = 90;
+
+        sm->approach_step_count = 0;
+        sm->scan_retry = 0;
+        prv_enter_scan_retry(sm);
+        return;
+    }
+
+    /* Guard: if servo2 exceeds 160°, roll back both s1 and s2 halfway to 90 */
+    if (sm->cur_servo2 > 160) {
+        int32_t s1_target = (int32_t)sm->cur_servo1 - ((int32_t)sm->cur_servo1 - 90) / 2;
+        int32_t s2_target = (int32_t)sm->cur_servo2 - ((int32_t)sm->cur_servo2 - 90) / 2;
+
+        SM_PRINT("[SM] guard: servo2=%d > 160  rollback s1=%d->%ld  s2=%d->%ld\r\n",
+                 (int)sm->cur_servo2,
+                 (int)sm->cur_servo1, (long)s1_target,
+                 (int)sm->cur_servo2, (long)s2_target);
+
+        smooth_move_servo1(sm->cur_servo1, (uint8_t)s1_target, NORMAL_STEP_MS);
+        sm->cur_servo1 = (uint8_t)s1_target;
+
+        smooth_move_servo2(sm->cur_servo2, (uint8_t)s2_target, NORMAL_STEP_MS);
+        sm->cur_servo2 = (uint8_t)s2_target;
 
         sm->approach_step_count = 0;
         sm->scan_retry = 0;
@@ -311,12 +337,14 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             sm->confirm_anchor_cx = det->detections[0].x;
             sm->confirm_anchor_cy = det->detections[0].y;
             sm->confirm_anchor_score = det->detections[0].score;
+            sm->confirm_anchor_width = det->detections[0].w;
             sm->confirm_frame_count = 0;
             sm->confirm_success_count = 0;
             sm->state = STATE_CONFIRM;
-            SM_PRINT("[SM] SCAN_SERVO2 -> CONFIRM  anchor(%.1f,%.1f) score=%.2f\r\n",
+            SM_PRINT("[SM] SCAN_SERVO2 -> CONFIRM  anchor(%.1f,%.1f) score=%.2f w=%.1f\r\n",
                      (double)sm->confirm_anchor_cx, (double)sm->confirm_anchor_cy,
-                     (double)sm->confirm_anchor_score);
+                     (double)sm->confirm_anchor_score,
+                     (double)sm->confirm_anchor_width);
             break;
         }
 
@@ -351,12 +379,14 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             sm->confirm_anchor_cx = det->detections[0].x;
             sm->confirm_anchor_cy = det->detections[0].y;
             sm->confirm_anchor_score = det->detections[0].score;
+            sm->confirm_anchor_width = det->detections[0].w;
             sm->confirm_frame_count = 0;
             sm->confirm_success_count = 0;
             sm->state = STATE_CONFIRM;
-            SM_PRINT("[SM] SCAN_SERVO0 -> CONFIRM  anchor(%.1f,%.1f) score=%.2f\r\n",
+            SM_PRINT("[SM] SCAN_SERVO0 -> CONFIRM  anchor(%.1f,%.1f) score=%.2f w=%.1f\r\n",
                      (double)sm->confirm_anchor_cx, (double)sm->confirm_anchor_cy,
-                     (double)sm->confirm_anchor_score);
+                     (double)sm->confirm_anchor_score,
+                     (double)sm->confirm_anchor_width);
             break;
         }
 
@@ -447,8 +477,8 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
                         break;
                     }
 
-                    /* Switch to a higher-confidence target — move halfway first */
-                    if (det->detections[i].score > sm->confirm_anchor_score + 0.1f && det->detections[i].w >= 20.0f) {
+                    /* Switch to a wider target — move centre toward it */
+                    if (det->detections[i].w > sm->confirm_anchor_width + 5.0f) {
                         float off_x = det->detections[i].x - sm->confirm_anchor_cx;
                         float off_y = det->detections[i].y - sm->confirm_anchor_cy;
 
@@ -466,13 +496,15 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
                         sm->confirm_anchor_cx = det->detections[i].x;
                         sm->confirm_anchor_cy = det->detections[i].y;
                         sm->confirm_anchor_score = det->detections[i].score;
+                        sm->confirm_anchor_width = det->detections[i].w;
                         sm->confirm_frame_count = 0;
                         sm->confirm_success_count = 0;
                         matched = false;
-                        SM_PRINT("[SM] CONFIRM  switch anchor -> (%.1f,%.1f) score=%.2f  "
-                                 "move s0=%ld s2=%d\r\n",
+                        SM_PRINT("[SM] CONFIRM  switch to wider target -> (%.1f,%.1f) "
+                                 "w=%.1f (>%.1f+5)  move s0=%ld s2=%d\r\n",
                                  (double)sm->confirm_anchor_cx, (double)sm->confirm_anchor_cy,
-                                 (double)sm->confirm_anchor_score,
+                                 (double)det->detections[i].w,
+                                 (double)sm->confirm_anchor_width,
                                  (long)new_s0, (int)new_s2);
                         break;
                     }
@@ -511,10 +543,10 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
         break;
 
     /* ================================================================
-     *  CALIBRATE — 5-frame sliding-window average centering
+     *  CALIBRATE — 3-frame sliding-window average centering
      *
-     *  First 4 samples: collect only, no movement.
-     *  From sample 5 onward: average the 5 values in the sliding window
+     *  First 2 samples: collect only, no movement.
+     *  From sample 3 onward: average the 3 values in the sliding window
      *  and execute one smooth move. Reset buffer after each move.
      *
      *  Servo0 ← cx offset (pan)
@@ -553,24 +585,24 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             /* Store in sliding-window circular buffer */
             sm->calib_cx_buf[sm->calib_buf_idx] = cx;
             sm->calib_cy_buf[sm->calib_buf_idx] = cy;
-            sm->calib_buf_idx = (sm->calib_buf_idx + 1) % 5;
+            sm->calib_buf_idx = (sm->calib_buf_idx + 1) % 3;
             sm->calib_sample_count++;
 
-            /* First 4 samples: collect only, no movement */
-            if (sm->calib_sample_count < 5) {
+            /* First 2 samples: collect only, no movement */
+            if (sm->calib_sample_count < 3) {
                 SM_PRINT("[SM] CALIBRATE: collect #%u  (%.1f,%.1f)\r\n",
                          (unsigned)sm->calib_sample_count, (double)cx, (double)cy);
                 break;
             }
 
-            /* Average the 5 values in the sliding window */
+            /* Average the 3 values in the sliding window */
             float sum_cx = 0.0f, sum_cy = 0.0f;
-            for (uint32_t i = 0; i < 5; i++) {
+            for (uint32_t i = 0; i < 3; i++) {
                 sum_cx += sm->calib_cx_buf[i];
                 sum_cy += sm->calib_cy_buf[i];
             }
-            const float cx_avg = sum_cx / 5.0f;
-            const float cy_avg = sum_cy / 5.0f;
+            const float cx_avg = sum_cx / 3.0f;
+            const float cy_avg = sum_cy / 3.0f;
             const float off_x = cx_avg - CX_TARGET;
             const float off_y = cy_avg - CY_TARGET;
 
@@ -628,7 +660,7 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
     /* ================================================================
      *  CENTERED — target centred, monitor drift / loss
      *
-     *  Drift detection uses 5-frame sliding window average (same buffer
+     *  Drift detection uses 3-frame sliding window average (same buffer
      *  as CALIBRATE, reset on entry) to avoid false positives from
      *  single-frame jitter.
      * ================================================================ */
@@ -661,22 +693,22 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             sm->track_cx = cx;
             sm->track_cy = cy;
 
-            /* Accumulate into 5-frame sliding window */
+            /* Accumulate into 3-frame sliding window */
             sm->calib_cx_buf[sm->calib_buf_idx] = cx;
             sm->calib_cy_buf[sm->calib_buf_idx] = cy;
-            sm->calib_buf_idx = (sm->calib_buf_idx + 1) % 5;
-            if (sm->calib_sample_count < 5)
+            sm->calib_buf_idx = (sm->calib_buf_idx + 1) % 3;
+            if (sm->calib_sample_count < 3)
                 sm->calib_sample_count++;
 
-            /* Check drift: average 5 frames before deciding */
-            if (sm->calib_sample_count >= 5) {
+            /* Check drift: average 3 frames before deciding */
+            if (sm->calib_sample_count >= 3) {
                 float sum_cx = 0.0f, sum_cy = 0.0f;
-                for (uint32_t i = 0; i < 5; i++) {
+                for (uint32_t i = 0; i < 3; i++) {
                     sum_cx += sm->calib_cx_buf[i];
                     sum_cy += sm->calib_cy_buf[i];
                 }
-                const float cx_avg = sum_cx / 5.0f;
-                const float cy_avg = sum_cy / 5.0f;
+                const float cx_avg = sum_cx / 3.0f;
+                const float cy_avg = sum_cy / 3.0f;
                 const float off_x = cx_avg - CX_TARGET;
                 const float off_y = cy_avg - CY_TARGET;
 
@@ -690,28 +722,36 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
                 }
             }
 
-            /* Check blueberry width to decide approach or pickup */
-            float bb_width = det->detections[0].w;
-            if (bb_width < 40.0f) {
-                /* Small — too far, start approaching */
-                sm->approach_step_count = 0;
-                sm->state = STATE_APPROACH;
-                SM_PRINT("[SM] CENTERED -> APPROACH  width=%.1f\r\n",
-                         (double)bb_width);
-            } else {
-                /* Width >= 40 — close enough, start pickup */
+            /* Decide approach vs pickup based on TOF distance and detection width.
+             * When TOF ≤ 80mm: close enough, enter CATCHING regardless of width
+             * (camera may be too close to focus, so width is unreliable).          */
+            if (sm->tof_distance_mm <= 80 && sm->tof_distance_mm < 8192) {
+                /* TOF says we're close enough — go for pickup */
                 sm->pre_catch_servo0 = sm->cur_servo0;
                 sm->pre_catch_servo1 = sm->cur_servo1;
                 sm->pre_catch_servo2 = sm->cur_servo2;
 
-                /* Already close enough — start pickup */
                 sm->state = STATE_CATCHING;
-                SM_PRINT("[SM] CENTERED -> CATCHING  width=%.1f  "
-                         "pre(servo0=%ld, servo1=%u, servo2=%u)\r\n",
-                         (double)bb_width,
-                         (long)sm->pre_catch_servo0,
-                         (unsigned)sm->pre_catch_servo1,
-                         (unsigned)sm->pre_catch_servo2);
+                SM_PRINT("[SM] CENTERED -> CATCHING  (TOF=%u mm, width=%.1f)\r\n",
+                         (unsigned)sm->tof_distance_mm,
+                         (double)det->detections[0].w);
+            } else if (det->detections[0].w >= 55.0f) {
+                /* Wide detection even though TOF > 80 — also close enough */
+                sm->pre_catch_servo0 = sm->cur_servo0;
+                sm->pre_catch_servo1 = sm->cur_servo1;
+                sm->pre_catch_servo2 = sm->cur_servo2;
+
+                sm->state = STATE_CATCHING;
+                SM_PRINT("[SM] CENTERED -> CATCHING  (width=%.1f >= 55, TOF=%u mm)\r\n",
+                         (double)det->detections[0].w,
+                         (unsigned)sm->tof_distance_mm);
+            } else {
+                /* Still far — start approaching */
+                sm->approach_step_count = 0;
+                sm->state = STATE_APPROACH;
+                SM_PRINT("[SM] CENTERED -> APPROACH  width=%.1f  tof=%u mm\r\n",
+                         (double)det->detections[0].w,
+                         (unsigned)sm->tof_distance_mm);
             }
         } else {
             sm->lose_counter++;
@@ -729,15 +769,26 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
      *
      *  Move servo1 -5° and servo2 +5° per step (keep camera level).
      *  Each step → CALIBRATE to re-centre.
-     *  Loop until CENTERED detects enough width → switches to CATCHING.
+     *  Loop until CENTERED / TOF triggers CATCHING.
      * ================================================================ */
     case STATE_APPROACH:
-        /* Move one approach step: s1 -3°, s2 +3° */
+        /* TOF guard: if already within 80mm, skip approach → go straight to CATCHING */
+        if (sm->tof_distance_mm <= 80 && sm->tof_distance_mm < 8192) {
+            sm->pre_catch_servo0 = sm->cur_servo0;
+            sm->pre_catch_servo1 = sm->cur_servo1;
+            sm->pre_catch_servo2 = sm->cur_servo2;
+            sm->state = STATE_CATCHING;
+            SM_PRINT("[SM] APPROACH -> CATCHING  (TOF=%u mm, skip movement)\r\n",
+                     (unsigned)sm->tof_distance_mm);
+            break;
+        }
+
+        /* Move one approach step: s1 -4°, s2 +4° */
         {
             int32_t step_deg = 3;
 
             int32_t new_s1 = (int32_t)sm->cur_servo1 - step_deg;
-            int32_t new_s2 = (int32_t)sm->cur_servo2 + step_deg;
+            int32_t new_s2 = (int32_t)sm->cur_servo2 + step_deg + 1; // +2° extra to compensate for arm tilt
             uint8_t clamped_s1 = clamp_u8(new_s1, 0, 180);
             uint8_t clamped_s2 = clamp_u8(new_s2, 0, 180);
 
@@ -753,7 +804,7 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             smooth_move_servo2(sm->cur_servo2, clamped_s2, NORMAL_STEP_MS);
             sm->cur_servo2 = clamped_s2;
 
-            delay_ms(300); // settle after movement
+            delay_ms(150); // settle after movement
 
             sm->approach_step_count++;
 
@@ -796,20 +847,16 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
         sm->cur_servo1 = 100;
         smooth_move_servo2(sm->cur_servo2, 130, FAST_STEP_MS);
         sm->cur_servo2 = 130;
+        delay_ms(200);
 
-        /* Return servo1 to 90° (垂直) */
-        smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
-        sm->cur_servo1 = 90;
-
-        /* Rotate base to 45° */
         smooth_move_servo0(sm->cur_servo0, 45, FAST_STEP_MS);
         sm->cur_servo0 = 45;
+        delay_ms(200);
 
-        delay_ms(1000); // wait for reaching drop position
-
-        /* Tilt camera down to 20° */
-        smooth_move_servo2(sm->cur_servo2, 20, FAST_STEP_MS);
-        sm->cur_servo2 = 20;
+        smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
+        sm->cur_servo1 = 90;
+        smooth_move_servo2(sm->cur_servo2, 45, FAST_STEP_MS);
+        sm->cur_servo2 = 45;
 
         /* Open gripper (松开夹爪放下目标) */
         servo_catch_open();

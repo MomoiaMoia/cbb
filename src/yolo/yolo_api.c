@@ -160,7 +160,7 @@ void YoloApi_Init(YoloApi* api) {
     memset(api, 0, sizeof(*api));
 
     api->params.num_boxes = YOLO_API_NUM_BOXES;
-    api->params.conf_threshold = 0.70f;
+    api->params.conf_threshold = 0.65f;
     api->params.iou_threshold = 0.50f;
     api->params.max_detections = YOLO_API_MAX_DETECTIONS;
 

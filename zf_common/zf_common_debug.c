@@ -32,9 +32,6 @@
 * 日期              作者                备注
 * 2026-05-19        SeekFree            first version
 ********************************************************************************************************************/
-#include <sys/stat.h>
-#include <unistd.h>
-#include <errno.h>
 
 #include "zf_common_debug.h"
 
@@ -89,21 +86,6 @@ void debug_log_handler (uint8 pass, char *str, char *file, int line)
     }while(0);
 }
 
-volatile bool debug_uart_tx_finish_flag = false;
-volatile bool debug_uart_rx_finish_flag = false;
-void debug_uart_callback (uart_callback_args_t * p_args)
-{
-    if(p_args->channel == 9)
-    {
-        switch(p_args->event)
-        {
-            case UART_EVENT_RX_COMPLETE: debug_uart_rx_finish_flag = true; break;
-            case UART_EVENT_TX_COMPLETE: debug_uart_tx_finish_flag = true; break;
-            default: break;
-        }
-    }
-}
-
 //-------------------------------------------------------------------------------------------------------------------
 // 函数简介     debug 串口初始化
 // 参数说明     void
@@ -114,64 +96,59 @@ void debug_uart_callback (uart_callback_args_t * p_args)
 void debug_init (void)
 {
     g_uart9.p_api->open(g_uart9.p_ctrl, g_uart9.p_cfg);
-    g_uart9.p_api->callbackSet(g_uart9.p_ctrl, debug_uart_callback, NULL, NULL);
+}
+
+#define DEBUG_DATA_BUFFER_MAX   ( 64 )
+uint32 debug_data_read = 0;
+uint32 debug_data_write = 0;
+uint32 debug_data_count = 0;
+uint8  debug_data_buffer[DEBUG_DATA_BUFFER_MAX] = {0};
+void uart9_callback (uart_callback_args_t* p_args)
+{
+    switch(p_args->event)
+    {
+        case UART_EVENT_RX_CHAR:
+        {
+            if(debug_data_count != 64)
+            {
+                debug_data_buffer[debug_data_write] = (uint8)p_args->data;
+                debug_data_write ++;
+                debug_data_write %= DEBUG_DATA_BUFFER_MAX;
+                debug_data_count ++;
+            }
+            break;
+        }
+        case UART_EVENT_TX_COMPLETE:
+        {
+            break;
+        }
+        default:
+            break;
+    }
 }
 
 // 重定向
-__attribute__((weak)) int _isatty(int fd)
-{
-    if (fd >= STDIN_FILENO && fd <= STDERR_FILENO)
-        return 1;
-
-    errno = EBADF;
-    return 0;
-}
-
-__attribute__((weak)) int _close(int fd)
-{
-    if (fd >= STDIN_FILENO && fd <= STDERR_FILENO)
-        return 0;
-
-    errno = EBADF;
-    return -1;
-}
-
-__attribute__((weak)) int _lseek(int fd, int ptr, int dir)
+int _write(int fd,char *pBuffer,int size)
 {
     (void)fd;
-    (void)ptr;
-    (void)dir;
-
-    errno = EBADF;
-    return -1;
-}
-
-__attribute__((weak)) int _fstat(int fd, struct stat *st)
-{
-    if (fd >= STDIN_FILENO && fd <= STDERR_FILENO)
-    {
-        st->st_mode = S_IFCHR;
-        return 0;
-    }
-
-    errno = EBADF;
-    return 0;
-}
-
-__attribute__((weak)) int _read(int fd, char *pBuffer, int size)
-{
-    (void)fd;
-    debug_uart_rx_finish_flag = false;
-    g_uart9.p_api->read(g_uart9.p_ctrl, pBuffer, 1);
-    while(!debug_uart_rx_finish_flag);
-    return 1;
-}
-
-__attribute__((weak)) int _write (int fd, char * pBuffer, int size)
-{
-    (void)fd;
-    debug_uart_tx_finish_flag = false;
     g_uart9.p_api->write(g_uart9.p_ctrl, pBuffer, size);
-    while(!debug_uart_tx_finish_flag);
+    return size;
+}
+
+// 重定向
+int __read(int fd,char *pBuffer,int size)
+{
+    (void)fd;
+    if(debug_data_count)
+    {
+        size = (size >= debug_data_count) ? (debug_data_count) : (size);
+    }
+    for(uint32 i = 0; size > i; i ++)
+    {
+        *pBuffer = debug_data_buffer[debug_data_read];
+        debug_data_read ++;
+        debug_data_read %= DEBUG_DATA_BUFFER_MAX;
+    }
+    debug_data_count -= size;
     return size;
 }

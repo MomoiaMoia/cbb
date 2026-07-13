@@ -61,6 +61,7 @@ typedef struct {
     float       confirm_anchor_cx;     // Reference cx from first detection
     float       confirm_anchor_cy;     // Reference cy from first detection
     float       confirm_anchor_score;  // Score of the anchor target
+    float       confirm_anchor_width;  // Width (px) of the anchor target
     uint8_t     confirm_frame_count;   // Frames elapsed in CONFIRM (max 30)
     uint8_t     confirm_success_count; // Matches within 30px threshold
 
@@ -97,6 +98,9 @@ typedef struct {
     float       kp_tilt;            // Proportional gain for tilt (servo2)
     float       deadband_x;         // |off_x| below this = centred (default 16.0 px)
     float       deadband_y;         // |off_y| below this = centred (default 16.0 px)
+
+    /* ---- TOF distance sensor (VL53L1X / DL1B) ---- */
+    uint16_t    tof_distance_mm;    // Latest distance reading (8192 = no data yet)
 
 } StateMachine;
 
