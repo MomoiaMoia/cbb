@@ -81,17 +81,17 @@ void compute_sub_0005(
 
   // inputs
   
-  const int8_t model_4_tf_nn_convolution_10_convolution_70237[6400], // 1,20,20,16
+  const int8_t model_9_tf_nn_convolution_83_convolution_70237[6400], // 1,20,20,16
   
-  const int8_t model_4_tf_nn_convolution_7_convolution_70238[6400], // 1,20,20,16
+  const int8_t model_9_tf_nn_convolution_84_convolution_70238[6400], // 1,20,20,16
   
-  const int8_t model_4_tf_nn_convolution_8_convolution_70239[6400], // 1,20,20,16
+  const int8_t model_9_tf_nn_convolution_85_convolution_70239[6400], // 1,20,20,16
   
-  const int8_t model_4_tf_nn_convolution_9_convolution_70240[6400], // 1,20,20,16
+  const int8_t model_9_tf_nn_convolution_86_convolution_70240[6400], // 1,20,20,16
   
 
   // outputs
   
-  int8_t model_4_tf_concat_3_concat_70241[25600]  // 1,20,20,64
+  int8_t model_9_tf_concat_127_concat_70241[25600]  // 1,20,20,64
   
 );

@@ -65,14 +65,14 @@ void compute_sub_0001(
 
   // inputs
   
-  const int8_t model_4_tf_nn_convolution_1_convolution_70198[25600], // 1,40,40,16
+  const int8_t model_9_tf_nn_convolution_77_convolution_70198[25600], // 1,40,40,16
   
-  const int8_t model_4_tf_nn_convolution_2_convolution_70199[25600], // 1,40,40,16
+  const int8_t model_9_tf_nn_convolution_78_convolution_70199[25600], // 1,40,40,16
   
 
   // outputs
   
-  int8_t model_4_tf_concat_concat_70200[51200]  // 1,40,40,32
+  int8_t model_9_tf_concat_124_concat_70200[51200]  // 1,40,40,32
   
 ) {
   // Buffers allocated on the main storage (note: depends on the execution order)
@@ -92,12 +92,12 @@ void compute_sub_0001(
 //
 
 arm_concatenation_s8_x	(
-      model_4_tf_nn_convolution_1_convolution_70198
+      model_9_tf_nn_convolution_77_convolution_70198
     , 16
     , 40
     , 40
     , 1
-    , model_4_tf_concat_concat_70200 
+    , model_9_tf_concat_124_concat_70200 
 
     , 32 
 
@@ -105,12 +105,12 @@ arm_concatenation_s8_x	(
 );
 
 arm_concatenation_s8_x	(
-      model_4_tf_nn_convolution_2_convolution_70199
+      model_9_tf_nn_convolution_78_convolution_70199
     , 16
     , 40
     , 40
     , 1
-    , model_4_tf_concat_concat_70200 
+    , model_9_tf_concat_124_concat_70200 
 
     , 32 
 

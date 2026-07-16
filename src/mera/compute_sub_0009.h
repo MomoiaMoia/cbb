@@ -81,13 +81,13 @@ void compute_sub_0009(
 
   // inputs
   
-  const int8_t model_4_tf_concat_122_concat_70503[32500], // 1,65,500
+  const int8_t model_9_tf_concat_246_concat_70503[32500], // 1,65,500
   
 
   // outputs
   
-  int8_t model_4_tf_compat_v1_transpose_242_transpose_70506_70595[32000] , // 64,500
+  int8_t model_9_tf_compat_v1_transpose_490_transpose_70506_70673[32000] , // 64,500
   
-  int8_t model_4_tf_strided_slice_5_StridedSlice_70520[500]  // 1,1,500
+  int8_t model_9_tf_strided_slice_13_StridedSlice_70520[500]  // 1,1,500
   
 );

@@ -69,20 +69,6 @@ extern uint8_t sub_0008_arena[kArenaSize_sub_0008];
 extern uint8_t sub_0010_arena[kArenaSize_sub_0010];
 extern uint8_t sub_0012_arena[kArenaSize_sub_0012];
 
-// Buffers
-extern int8_t buf_model_4_tf_nn_convolution_1_convolution_70198[25600];
-extern int8_t buf_model_4_tf_nn_convolution_2_convolution_70199[25600];
-extern int8_t buf_model_4_tf_math_multiply_8_Mul_70206[51200];
-extern int8_t buf_model_4_tf_nn_convolution_10_convolution_70237[6400];
-extern int8_t buf_model_4_tf_nn_convolution_7_convolution_70238[6400];
-extern int8_t buf_model_4_tf_nn_convolution_8_convolution_70239[6400];
-extern int8_t buf_model_4_tf_nn_convolution_9_convolution_70240[6400];
-extern int8_t buf_model_4_tf_math_multiply_25_Mul_70247[25600];
-extern int8_t buf_model_4_tf_concat_122_concat_70503[32500];
-extern int8_t buf_model_4_tf_reshape_3_Reshape_70510[2000];
-extern int8_t buf_PartitionedCall_0_70519[2000];
-extern int8_t buf_PartitionedCall_1_70521[500];
-
 
 void RunModel(bool clean_outputs);
 

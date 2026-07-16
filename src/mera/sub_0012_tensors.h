@@ -11,8 +11,8 @@ extern const size_t sub_0012_tensors_count;
 #define kArenaSize_sub_0012 5072
 
 // Addresses for each input and output buffer inside of the arena
-extern const uint32_t sub_0012_address_model_4_tf_strided_slice_7_StridedSlice_70513;
-extern const uint32_t sub_0012_address_model_4_tf_strided_slice_6_StridedSlice_70511;
+extern const uint32_t sub_0012_address_model_9_tf_strided_slice_15_StridedSlice_70513;
+extern const uint32_t sub_0012_address_model_9_tf_strided_slice_14_StridedSlice_70511;
 extern const uint32_t sub_0012_address_PartitionedCall_0_70519;
 
 

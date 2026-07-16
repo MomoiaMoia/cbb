@@ -16,6 +16,8 @@
 
 #include "zf_device_dl1b.h"
 
+#include "rf433/rf433.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -38,7 +40,7 @@ static uint8_t g_rgb_corrected[RGB_BUF_SIZE] BSP_ALIGN_VARIABLE(8);
 /* Geometric distortion parameters (径向畸变) */
 #define GEO_K1     -0.12f    /* barrel distortion (中间鼓) */
 #define GEO_K2      0.00f    /* higher-order term */
-#define GEO_ASPECT  1.03f    /* aspect ratio correction (中心椭圆补偿) */
+#define GEO_ASPECT  1.06f    /* aspect ratio correction (中心椭圆补偿) */
 
 /* RGB565 display buffer for IPS200 (160x160 image in RGB565 format) */
 static uint16_t g_rgb565_buffer[SCC8660_W * SCC8660_H] BSP_ALIGN_VARIABLE(8);
@@ -120,6 +122,10 @@ void hal_entry(void)
     printf("[LCD] IPS200 init success (landscape 320x240)\r\n");
     R_BSP_SoftwareDelay(500, BSP_DELAY_UNITS_MILLISECONDS);
 
+    /* Initialize RF433 remote module */
+    rf433_init();
+    printf("[RF433] RF433 init success (P707 D0)\r\n");
+
     /* Initialize servos and return to center */
     err = servo0_init();
     handle_error(err, " ** servo0_init FAILED ** \r\n");
@@ -197,8 +203,28 @@ void hal_entry(void)
             g_state_machine.tof_distance_mm = (dl1b_distance_mm >= 25) ? (dl1b_distance_mm - 25) : 0;
         }
 
-        /*--- State machine step: controls servos based on detection ---*/
-        StateMachine_Step(&g_state_machine, det_result);
+        /*--- RF433 remote signal check: skip state machine if no signal ---*/
+        int rf433_signal = rf433_scan();
+        printf("[RF433] Signal check: %d\r\n", rf433_signal);
+
+        /*---- RF433 status indicator (bottom-right corner) ----*/
+        {
+            ips200_set_color(RGB565_WHITE, RGB565_BLACK);
+            ips200_show_string(242, 210, "Status:");
+            /* Draw filled rectangle (48x14) like detection box style */
+            uint16 color = rf433_signal ? RGB565_GREEN : RGB565_RED;
+            int sx = 242, sy = 226, ex = 289, ey = 239;
+            for (int i = sy; i <= ey; i++) {
+                ips200_draw_line(sx, i, ex, i, color);
+            }
+        }
+
+        if (!rf433_signal) {
+            printf("[RF433] No signal, state machine paused.\r\n");
+        } else {
+            /*--- State machine step: controls servos based on detection ---*/
+            StateMachine_Step(&g_state_machine, det_result);
+        }
     }
 
     YoloApi_Deinit(&yolo_api);

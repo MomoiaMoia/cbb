@@ -32,7 +32,7 @@ int sub_0000_invoke(bool clean_outputs) {
   int cms_size = 0;
 
   // Prepare base_addrs and base_addrs_size arrays
-  // Buffer sub_0000_model with size 6960 and address: 4294967295
+  // Buffer sub_0000_model with size 6944 and address: 4294967295
   base_addrs[0] = (uint64_t)(uintptr_t)sub_0000_model_data;
   base_addrs_size[0] = sub_0000_model_data_size;
   // Buffer sub_0000_arena with size 209984 and address: 0

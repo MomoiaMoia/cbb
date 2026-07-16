@@ -65,14 +65,14 @@ void compute_sub_0011(
 
   // inputs
   
-  const int8_t model_4_tf_reshape_3_Reshape_70510[2000], // 1,4,500
+  const int8_t model_9_tf_reshape_7_Reshape_70510[2000], // 1,4,500
   
 
   // outputs
   
-  int8_t model_4_tf_strided_slice_6_StridedSlice_70511[1000] , // 1,2,500
+  int8_t model_9_tf_strided_slice_14_StridedSlice_70511[1000] , // 1,2,500
   
-  int8_t model_4_tf_strided_slice_7_StridedSlice_70513[1000]  // 1,2,500
+  int8_t model_9_tf_strided_slice_15_StridedSlice_70513[1000]  // 1,2,500
   
 ) {
   // Buffers allocated on the main storage (note: depends on the execution order)
@@ -129,8 +129,8 @@ int32_t input_shape[3] = { 1, 4, 500,  };
 
 int32_t output_shape[3] = { 1, 2, 500,  };
 
-StridedSlice(model_4_tf_reshape_3_Reshape_70510,  // input data
-  model_4_tf_strided_slice_7_StridedSlice_70513,      // output data
+StridedSlice(model_9_tf_reshape_7_Reshape_70510,  // input data
+  model_9_tf_strided_slice_15_StridedSlice_70513,      // output data
   Int32VecConstant_70019_1,       // begin
   Int32VecConstant_70020,         // end
   Int32VecConstant_70015_3,     // strides
@@ -157,8 +157,8 @@ int32_t input_shape[3] = { 1, 4, 500,  };
 
 int32_t output_shape[3] = { 1, 2, 500,  };
 
-StridedSlice(model_4_tf_reshape_3_Reshape_70510,  // input data
-  model_4_tf_strided_slice_6_StridedSlice_70511,      // output data
+StridedSlice(model_9_tf_reshape_7_Reshape_70510,  // input data
+  model_9_tf_strided_slice_14_StridedSlice_70511,      // output data
   Int32VecConstant_70013_1,       // begin
   Int32VecConstant_70019_0,         // end
   Int32VecConstant_70015_2,     // strides

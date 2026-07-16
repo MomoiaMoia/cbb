@@ -65,46 +65,46 @@ void compute_sub_0007(
 
   // inputs
   
-  const int8_t model_4_tf_math_multiply_25_Mul_70247[25600], // 1,20,20,64
+  const int8_t model_9_tf_math_multiply_275_Mul_70247[25600], // 1,20,20,64
   
 
   // outputs
   
-  int8_t model_4_tf_compat_v1_transpose_5_transpose_70251_70649[12800] , // 400,32
+  int8_t model_9_tf_compat_v1_transpose_253_transpose_70251_70547[12800] , // 400,32
   
-  int8_t model_4_tf_compat_v1_transpose_7_transpose_70249_70661[12800] , // 400,32
+  int8_t model_9_tf_compat_v1_transpose_255_transpose_70249_70559[12800] , // 400,32
   
-  int8_t model_4_tf_strided_slice_3_StridedSlice_70250[12800]  // 1,20,20,32
+  int8_t model_9_tf_strided_slice_11_StridedSlice_70250[12800]  // 1,20,20,32
   
 ) {
   // Buffers allocated on the main storage (note: depends on the execution order)
     
   
-  int8_t* model_4_tf_strided_slice_2_StridedSlice_70248 = (int8_t *) &main_storage[12800]; // 1,20,20,32 == 12800
+  int8_t* model_9_tf_strided_slice_10_StridedSlice_70248 = (int8_t *) &main_storage[12800]; // 1,20,20,32 == 12800
   
   
 
   // Parameters
   
   
-  static const int32_t Int32VecConstant_70003_1[4] = { // 4
-    0, 0, 0, 32, 
+  static const int32_t Int32VecConstant_70002_0[4] = { // 4
+    0, 0, 0, 0, 
   };
   
-  static const int32_t Int32VecConstant_70003_2[4] = { // 4
-    0, 0, 0, 32, 
+  static const int32_t Int32VecConstant_70004_0[4] = { // 4
+    1, 1, 1, 1, 
   };
   
   static const int32_t Int32VecConstant_70004_1[4] = { // 4
     1, 1, 1, 1, 
   };
   
-  static const int32_t Int32VecConstant_70004_2[4] = { // 4
-    1, 1, 1, 1, 
+  static const int32_t Int32VecConstant_70006_0[4] = { // 4
+    0, 0, 0, 32, 
   };
   
-  static const int32_t Int32VecConstant_70006_0[4] = { // 4
-    0, 0, 0, 0, 
+  static const int32_t Int32VecConstant_70006_1[4] = { // 4
+    0, 0, 0, 32, 
   };
   
   static const int32_t Int32VecConstant_70008[4] = { // 4
@@ -135,11 +135,11 @@ int32_t input_shape[4] = { 1, 20, 20, 64,  };
 
 int32_t output_shape[4] = { 1, 20, 20, 32,  };
 
-StridedSlice(model_4_tf_math_multiply_25_Mul_70247,  // input data
-  model_4_tf_strided_slice_3_StridedSlice_70250,      // output data
-  Int32VecConstant_70003_2,       // begin
+StridedSlice(model_9_tf_math_multiply_275_Mul_70247,  // input data
+  model_9_tf_strided_slice_11_StridedSlice_70250,      // output data
+  Int32VecConstant_70006_1,       // begin
   Int32VecConstant_70008,         // end
-  Int32VecConstant_70004_2,     // strides
+  Int32VecConstant_70004_1,     // strides
   input_shape,    // input shape
   4,         // input dimensions
   output_shape,    // output shape
@@ -148,13 +148,13 @@ StridedSlice(model_4_tf_math_multiply_25_Mul_70247,  // input data
 }
 
 //
-// Identity - bypassing model_4_tf_compat_v1_transpose_5_transpose_70251_70649 operation
+// Identity - bypassing model_9_tf_compat_v1_transpose_253_transpose_70251_70547 operation
 //
-// Input model_4_tf_strided_slice_3_StridedSlice_70250: int8_t - 1,20,20,32
-// Output model_4_tf_compat_v1_transpose_5_transpose_70251_70649: int8_t - 400,32
+// Input model_9_tf_strided_slice_11_StridedSlice_70250: int8_t - 1,20,20,32
+// Output model_9_tf_compat_v1_transpose_253_transpose_70251_70547: int8_t - 400,32
 
 
-memcpy(model_4_tf_compat_v1_transpose_5_transpose_70251_70649, model_4_tf_strided_slice_3_StridedSlice_70250, 12800 * sizeof(int8_t));
+memcpy(model_9_tf_compat_v1_transpose_253_transpose_70251_70547, model_9_tf_strided_slice_11_StridedSlice_70250, 12800 * sizeof(int8_t));
 
 
 
@@ -176,11 +176,11 @@ int32_t input_shape[4] = { 1, 20, 20, 64,  };
 
 int32_t output_shape[4] = { 1, 20, 20, 32,  };
 
-StridedSlice(model_4_tf_math_multiply_25_Mul_70247,  // input data
-  model_4_tf_strided_slice_2_StridedSlice_70248,      // output data
-  Int32VecConstant_70006_0,       // begin
-  Int32VecConstant_70003_1,         // end
-  Int32VecConstant_70004_1,     // strides
+StridedSlice(model_9_tf_math_multiply_275_Mul_70247,  // input data
+  model_9_tf_strided_slice_10_StridedSlice_70248,      // output data
+  Int32VecConstant_70002_0,       // begin
+  Int32VecConstant_70006_0,         // end
+  Int32VecConstant_70004_0,     // strides
   input_shape,    // input shape
   4,         // input dimensions
   output_shape,    // output shape
@@ -189,13 +189,13 @@ StridedSlice(model_4_tf_math_multiply_25_Mul_70247,  // input data
 }
 
 //
-// Identity - bypassing model_4_tf_compat_v1_transpose_7_transpose_70249_70661 operation
+// Identity - bypassing model_9_tf_compat_v1_transpose_255_transpose_70249_70559 operation
 //
-// Input model_4_tf_strided_slice_2_StridedSlice_70248: int8_t - 1,20,20,32
-// Output model_4_tf_compat_v1_transpose_7_transpose_70249_70661: int8_t - 400,32
+// Input model_9_tf_strided_slice_10_StridedSlice_70248: int8_t - 1,20,20,32
+// Output model_9_tf_compat_v1_transpose_255_transpose_70249_70559: int8_t - 400,32
 
 
-memcpy(model_4_tf_compat_v1_transpose_7_transpose_70249_70661, model_4_tf_strided_slice_2_StridedSlice_70248, 12800 * sizeof(int8_t));
+memcpy(model_9_tf_compat_v1_transpose_255_transpose_70249_70559, model_9_tf_strided_slice_10_StridedSlice_70248, 12800 * sizeof(int8_t));
 
 
 

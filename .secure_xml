@@ -204,6 +204,9 @@
       <configSetting altId="p703.gpio_mode.gpio_mode_peripheral" configurationId="p703.gpio_mode"/>
       <configSetting altId="p704.gpio_irq.gpio_irq_enabled" configurationId="p704.gpio_irq"/>
       <configSetting altId="p704.gpio_mode.gpio_mode_irq" configurationId="p704.gpio_mode"/>
+      <configSetting altId="p707.input" configurationId="p707"/>
+      <configSetting altId="p707.gpio_mode.gpio_mode_in" configurationId="p707.gpio_mode"/>
+      <configSetting altId="p707.gpio_pupd.gpio_pupd_ip_up" configurationId="p707.gpio_pupd"/>
       <configSetting altId="p708.gpio_mode.gpio_mode_peripheral" configurationId="p708.gpio_mode"/>
       <configSetting altId="p914.gpio_mode.gpio_mode_peripheral" configurationId="p914.gpio_mode"/>
       <configSetting altId="pb00.output.high" configurationId="pb00"/>

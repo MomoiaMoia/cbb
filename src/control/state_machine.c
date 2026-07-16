@@ -145,35 +145,35 @@ static void smooth_move_servo2(uint8_t from, uint8_t to, uint32_t step_ms) {
  * Enter the appropriate scanning state based on sm->scan_retry.
  *
  * Retry levels:
- *   0 — keep current servo0, sweep servo2 110→40 (first retry)
- *   1 — reset servo0=45, sweep servo2 110→40 (centre + vertical)
+ *   0 — keep current servo0, sweep servo2 40→110 (first retry)
+ *   1 — reset servo0=45, sweep servo2 40→110 (centre + vertical)
  *   2 — X-scan: s0 -45→135 + s2 110→40 diagonal, then reverse
  *   After level 2 → back to level 1 (cycle)
  */
 static void prv_enter_scan_retry(StateMachine *sm) {
     switch (sm->scan_retry) {
     case 0:
-        /* Keep current servo0, start vertical sweep */
-        smooth_move_servo2(sm->cur_servo2, 110, FAST_STEP_MS);
-        sm->cur_servo2 = 110;
-        sm->scan_angle = 110;
+        /* Keep current servo0, start vertical sweep (bottom→up) */
+        smooth_move_servo2(sm->cur_servo2, 40, FAST_STEP_MS);
+        sm->cur_servo2 = 40;
+        sm->scan_angle = 40;
         sm->scan_step = 5;
         sm->state = STATE_SCAN_SERVO2;
-        SM_PRINT("[SM] retry=0  servo0=%ld  SCAN_SERVO2 110->40\r\n", (long)sm->cur_servo0);
+        SM_PRINT("[SM] retry=0  servo0=%ld  SCAN_SERVO2 40->110\r\n", (long)sm->cur_servo0);
         break;
 
     case 1:
-        /* Reset to centre, restore servo1 vertical, vertical sweep */
+        /* Reset to centre, restore servo1 vertical, vertical sweep (bottom→up) */
         smooth_move_servo0(sm->cur_servo0, 45, FAST_STEP_MS);
         sm->cur_servo0 = 45;
         smooth_move_servo1(sm->cur_servo1, 90, FAST_STEP_MS);
         sm->cur_servo1 = 90;
-        smooth_move_servo2(sm->cur_servo2, 110, FAST_STEP_MS);
-        sm->cur_servo2 = 110;
-        sm->scan_angle = 110;
+        smooth_move_servo2(sm->cur_servo2, 40, FAST_STEP_MS);
+        sm->cur_servo2 = 40;
+        sm->scan_angle = 40;
         sm->scan_step = 5;
         sm->state = STATE_SCAN_SERVO2;
-        SM_PRINT("[SM] retry=1  servo0=45  SCAN_SERVO2 110->40\r\n");
+        SM_PRINT("[SM] retry=1  servo0=45  SCAN_SERVO2 40->110\r\n");
         break;
 
     case 2:
@@ -321,15 +321,15 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
 
         sm->cur_servo0 = 45;
         sm->cur_servo1 = 90;
-        sm->cur_servo2 = 110;
-        sm->scan_angle = 110;
+        sm->cur_servo2 = 40;
+        sm->scan_angle = 40;
         sm->scan_step = 1;
         sm->state = STATE_SCAN_SERVO2;
         SM_PRINT("[SM] INIT -> SCAN_SERVO2 (servo2=%ld deg)\r\n", (long)sm->scan_angle);
         break;
 
     /* ================================================================
-     *  SCAN_SERVO2 — vertical sweep  110° → 40°
+     *  SCAN_SERVO2 — vertical sweep  40° → 110°
      * ================================================================ */
     case STATE_SCAN_SERVO2:
         if (has_det && det->detections[0].w >= MIN_DET_W) {
@@ -348,8 +348,8 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             break;
         }
 
-        sm->scan_angle -= sm->scan_step;
-        if (sm->scan_angle < 40) {
+        sm->scan_angle += sm->scan_step;
+        if (sm->scan_angle > 110) {
             /* Vertical sweep done — advance retry level */
             if (sm->scan_retry == 0) {
                 sm->scan_retry = 1;
@@ -722,35 +722,33 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
                 }
             }
 
-            /* Decide approach vs pickup based on TOF distance and detection width.
-             * When TOF ≤ 80mm: close enough, enter CATCHING regardless of width
-             * (camera may be too close to focus, so width is unreliable).          */
-            if (sm->tof_distance_mm <= 80 && sm->tof_distance_mm < 8192) {
-                /* TOF says we're close enough — go for pickup */
-                sm->pre_catch_servo0 = sm->cur_servo0;
-                sm->pre_catch_servo1 = sm->cur_servo1;
-                sm->pre_catch_servo2 = sm->cur_servo2;
-
-                sm->state = STATE_CATCHING;
-                SM_PRINT("[SM] CENTERED -> CATCHING  (TOF=%u mm, width=%.1f)\r\n",
-                         (unsigned)sm->tof_distance_mm,
-                         (double)det->detections[0].w);
-            } else if (det->detections[0].w >= 55.0f) {
-                /* Wide detection even though TOF > 80 — also close enough */
-                sm->pre_catch_servo0 = sm->cur_servo0;
-                sm->pre_catch_servo1 = sm->cur_servo1;
-                sm->pre_catch_servo2 = sm->cur_servo2;
-
-                sm->state = STATE_CATCHING;
-                SM_PRINT("[SM] CENTERED -> CATCHING  (width=%.1f >= 55, TOF=%u mm)\r\n",
-                         (double)det->detections[0].w,
-                         (unsigned)sm->tof_distance_mm);
-            } else {
-                /* Still far — start approaching */
+            /* Check blueberry width & TOF distance to decide approach or pickup */
+            float bb_width = det->detections[0].w;
+            if (bb_width < 40.0f) {
+                /* Small — too far, start approaching */
                 sm->approach_step_count = 0;
                 sm->state = STATE_APPROACH;
-                SM_PRINT("[SM] CENTERED -> APPROACH  width=%.1f  tof=%u mm\r\n",
-                         (double)det->detections[0].w,
+                SM_PRINT("[SM] CENTERED -> APPROACH  width=%.1f\r\n",
+                         (double)bb_width);
+            } else if (sm->tof_distance_mm <= 50 || bb_width > 40.0f) {
+                /* Width >= 40 AND TOF <= 50mm — close enough, start pickup */
+                sm->pre_catch_servo0 = sm->cur_servo0;
+                sm->pre_catch_servo1 = sm->cur_servo1;
+                sm->pre_catch_servo2 = sm->cur_servo2;
+
+                /* Already close enough — start pickup */
+                sm->state = STATE_CATCHING;
+                SM_PRINT("[SM] CENTERED -> CATCHING  width=%.1f  tof=%u mm  "
+                         "pre(servo0=%ld, servo1=%u, servo2=%u)\r\n",
+                         (double)bb_width,
+                         (unsigned)sm->tof_distance_mm,
+                         (long)sm->pre_catch_servo0,
+                         (unsigned)sm->pre_catch_servo1,
+                         (unsigned)sm->pre_catch_servo2);
+            } else {
+                /* Width >= 40 but TOF still > 50mm — wait, keep centred */
+                SM_PRINT("[SM] CENTERED  width=%.1f  tof=%u mm  (waiting for TOF <= 50)\r\n",
+                         (double)bb_width,
                          (unsigned)sm->tof_distance_mm);
             }
         } else {
@@ -769,20 +767,9 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
      *
      *  Move servo1 -5° and servo2 +5° per step (keep camera level).
      *  Each step → CALIBRATE to re-centre.
-     *  Loop until CENTERED / TOF triggers CATCHING.
+     *  Loop until CENTERED detects enough width → switches to CATCHING.
      * ================================================================ */
     case STATE_APPROACH:
-        /* TOF guard: if already within 80mm, skip approach → go straight to CATCHING */
-        if (sm->tof_distance_mm <= 80 && sm->tof_distance_mm < 8192) {
-            sm->pre_catch_servo0 = sm->cur_servo0;
-            sm->pre_catch_servo1 = sm->cur_servo1;
-            sm->pre_catch_servo2 = sm->cur_servo2;
-            sm->state = STATE_CATCHING;
-            SM_PRINT("[SM] APPROACH -> CATCHING  (TOF=%u mm, skip movement)\r\n",
-                     (unsigned)sm->tof_distance_mm);
-            break;
-        }
-
         /* Move one approach step: s1 -4°, s2 +4° */
         {
             int32_t step_deg = 3;
@@ -842,23 +829,38 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
         servo_catch_close_slow(600);
         delay_ms(200); // wait for gripper to close
 
-        /* Move servo2→130° first, then servo1→100° (抬臂 + 抬头) */
-        smooth_move_servo1(sm->cur_servo1, 100, NORMAL_STEP_MS);
-        sm->cur_servo1 = 100;
-        smooth_move_servo2(sm->cur_servo2, 130, FAST_STEP_MS);
-        sm->cur_servo2 = 130;
-        delay_ms(200);
-
-        smooth_move_servo0(sm->cur_servo0, 45, FAST_STEP_MS);
-        sm->cur_servo0 = 45;
-        delay_ms(200);
-
+        /* Step 3: servo1 → 90° (return to vertical) */
         smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
         sm->cur_servo1 = 90;
+        delay_ms(100);
+
+        /* Step 4: servo0 → current - 45° (rotate base away) */
+        {
+            int32_t new_s0 = clamp_i32((int32_t)sm->cur_servo0 - 45, -135, 135);
+            smooth_move_servo0(sm->cur_servo0, new_s0, FAST_STEP_MS);
+            sm->cur_servo0 = new_s0;
+        }
+        delay_ms(100);
+
+        /* Step 5: servo2 → current + 20° (tilt up to clear) */
+        {
+            uint8_t new_s2 = clamp_u8((int32_t)sm->cur_servo2 + 20, 0, 180);
+            smooth_move_servo2(sm->cur_servo2, new_s2, FAST_STEP_MS);
+            sm->cur_servo2 = new_s2;
+        }
+        delay_ms(100);
+
+        /* Step 6: servo0 → 45° (return to centre) */
+        smooth_move_servo0(sm->cur_servo0, 45, FAST_STEP_MS);
+        sm->cur_servo0 = 45;
+        delay_ms(100);
+
+        /* Step 7: servo2 → 45° (tilt down to drop position) */
         smooth_move_servo2(sm->cur_servo2, 45, FAST_STEP_MS);
         sm->cur_servo2 = 45;
+        delay_ms(100);
 
-        /* Open gripper (松开夹爪放下目标) */
+        /* Step 8: Open gripper (松开夹爪放下目标) */
         servo_catch_open();
         delay_ms(200); // wait for gripper to open
 

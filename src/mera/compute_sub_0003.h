@@ -81,15 +81,15 @@ void compute_sub_0003(
 
   // inputs
   
-  const int8_t model_4_tf_math_multiply_8_Mul_70206[51200], // 1,40,40,32
+  const int8_t model_9_tf_math_multiply_258_Mul_70206[51200], // 1,40,40,32
   
 
   // outputs
   
-  int8_t model_4_tf_compat_v1_transpose_2_transpose_70218_70613[25600] , // 1600,16
+  int8_t model_9_tf_compat_v1_transpose_248_transpose_70210_70523[25600] , // 1600,16
   
-  int8_t model_4_tf_compat_v1_transpose_transpose_70208_70673[25600] , // 1600,16
+  int8_t model_9_tf_compat_v1_transpose_250_transpose_70208_70535[25600] , // 1600,16
   
-  int8_t model_4_tf_strided_slice_1_StridedSlice_70207[25600]  // 1,40,40,16
+  int8_t model_9_tf_strided_slice_9_StridedSlice_70209[25600]  // 1,40,40,16
   
 );
