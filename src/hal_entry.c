@@ -38,9 +38,9 @@ static uint8_t g_rgb_buffer[RGB_BUF_SIZE] BSP_ALIGN_VARIABLE(8);
 static uint8_t g_rgb_corrected[RGB_BUF_SIZE] BSP_ALIGN_VARIABLE(8);
 
 /* Geometric distortion parameters (径向畸变) */
-#define GEO_K1     -0.12f    /* barrel distortion (中间鼓) */
+#define GEO_K1     -0.15f    /* barrel distortion (中间鼓) */
 #define GEO_K2      0.00f    /* higher-order term */
-#define GEO_ASPECT  1.06f    /* aspect ratio correction (中心椭圆补偿) */
+#define GEO_ASPECT  1.10f    /* aspect ratio correction (中心椭圆补偿) */
 
 /* RGB565 display buffer for IPS200 (160x160 image in RGB565 format) */
 static uint16_t g_rgb565_buffer[SCC8660_W * SCC8660_H] BSP_ALIGN_VARIABLE(8);
@@ -163,6 +163,16 @@ void hal_entry(void)
                            GEO_K1, GEO_K2, GEO_ASPECT);
 
         YoloDetectionResult *det_result = YoloApi_RunYolo(&yolo_api, g_rgb_corrected);
+
+        /*---- Filter: discard narrow detections ----*/
+        YoloApi_FilterByWidth(det_result, 10.0f);
+
+        // /*---- Filter: check centre-pixel colour (蓝莓色域 #000000 ~ #B4DCFF) ----*/
+        // YoloApi_FilterByColor(det_result, g_rgb_corrected,
+        //                       SCC8660_W, SCC8660_H,
+        //                       0, 180,   /* R: 两端放宽 */
+        //                       0, 220,   /* G: 两端放宽 */
+        //                       0, 255);  /* B: 两端放宽 */
 
         /*---- Convert RGB888 -> RGB565 and display on IPS200 ----*/
         rgb888_to_rgb565_buffer(g_rgb_corrected, g_rgb565_buffer, SCC8660_W * SCC8660_H);

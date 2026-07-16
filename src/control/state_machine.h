@@ -71,7 +71,6 @@ typedef struct {
 
     /* ---- Loss tracking ---- */
     uint8_t     lose_counter;
-    uint8_t     max_lose_frames;    // Default 60
 
     /* ---- Current servo positions (tracked internally) ---- */
     int32_t     cur_servo0;         // -135 … +135

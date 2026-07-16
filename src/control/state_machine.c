@@ -53,7 +53,7 @@
 #define KP_TILT 0.20f
 #define DEADBAND_X 16.0f
 #define DEADBAND_Y 16.0f
-#define MIN_DET_W 10.0f
+#define MAX_LOSE_FRAMES 30u   /* 连续丢失帧最大限额: 超过则退回扫描 */
 
 /* ------------------------------------------------------------------ */
 /*  Local helpers                                                      */
@@ -241,7 +241,7 @@ void StateMachine_Init(StateMachine *sm) {
     sm->approach_step_count = 0;
 
     sm->lose_counter = 0;
-    sm->max_lose_frames = 60;
+
     sm->scan_retry = 0;
     sm->scan_phase = 0;
 
@@ -317,7 +317,7 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
     case STATE_INIT:
         smooth_move_servo0(sm->cur_servo0, 45, NORMAL_STEP_MS);
         smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
-        smooth_move_servo2(sm->cur_servo2, 110, NORMAL_STEP_MS);
+        smooth_move_servo2(sm->cur_servo2, 40, NORMAL_STEP_MS);
 
         sm->cur_servo0 = 45;
         sm->cur_servo1 = 90;
@@ -332,7 +332,7 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
      *  SCAN_SERVO2 — vertical sweep  40° → 110°
      * ================================================================ */
     case STATE_SCAN_SERVO2:
-        if (has_det && det->detections[0].w >= MIN_DET_W) {
+        if (has_det) {
             /* Save anchor and enter confirmation */
             sm->confirm_anchor_cx = det->detections[0].x;
             sm->confirm_anchor_cy = det->detections[0].y;
@@ -374,7 +374,7 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
      *  After phase 2 → cycle back to retry=1
      * ================================================================ */
     case STATE_SCAN_SERVO0:
-        if (has_det && det->detections[0].w >= MIN_DET_W) {
+        if (has_det) {
             /* Save anchor and enter confirmation */
             sm->confirm_anchor_cx = det->detections[0].x;
             sm->confirm_anchor_cy = det->detections[0].y;
@@ -464,9 +464,6 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
                     check_cnt = 3;
 
                 for (uint32_t i = 0; i < check_cnt; i++) {
-                    if (det->detections[i].w < MIN_DET_W)
-                        continue;
-
                     float dx = det->detections[i].x - sm->confirm_anchor_cx;
                     float dy = det->detections[i].y - sm->confirm_anchor_cy;
                     float d = sqrtf(dx * dx + dy * dy);
@@ -474,38 +471,6 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
                     if (d <= 30.0f) {
                         sm->confirm_success_count++;
                         matched = true;
-                        break;
-                    }
-
-                    /* Switch to a wider target — move centre toward it */
-                    if (det->detections[i].w > sm->confirm_anchor_width + 5.0f) {
-                        float off_x = det->detections[i].x - sm->confirm_anchor_cx;
-                        float off_y = det->detections[i].y - sm->confirm_anchor_cy;
-
-                        int32_t delta_pan = (int32_t)(off_x * 0.5f * sm->kp_pan);
-                        int32_t delta_tilt = (int32_t)(-off_y * 0.5f * sm->kp_tilt);
-
-                        int32_t new_s0 = clamp_i32(sm->cur_servo0 + delta_pan, -135, 135);
-                        uint8_t new_s2 = clamp_u8((int32_t)sm->cur_servo2 + delta_tilt, 0, 180);
-
-                        smooth_move_servo0(sm->cur_servo0, new_s0, NORMAL_STEP_MS);
-                        sm->cur_servo0 = new_s0;
-                        smooth_move_servo2(sm->cur_servo2, new_s2, NORMAL_STEP_MS);
-                        sm->cur_servo2 = new_s2;
-
-                        sm->confirm_anchor_cx = det->detections[i].x;
-                        sm->confirm_anchor_cy = det->detections[i].y;
-                        sm->confirm_anchor_score = det->detections[i].score;
-                        sm->confirm_anchor_width = det->detections[i].w;
-                        sm->confirm_frame_count = 0;
-                        sm->confirm_success_count = 0;
-                        matched = false;
-                        SM_PRINT("[SM] CONFIRM  switch to wider target -> (%.1f,%.1f) "
-                                 "w=%.1f (>%.1f+5)  move s0=%ld s2=%d\r\n",
-                                 (double)sm->confirm_anchor_cx, (double)sm->confirm_anchor_cy,
-                                 (double)det->detections[i].w,
-                                 (double)sm->confirm_anchor_width,
-                                 (long)new_s0, (int)new_s2);
                         break;
                     }
                 }
@@ -557,12 +522,10 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
         if (has_det) {
             sm->lose_counter = 0;
 
-            /* Find detection closest to the target we're tracking (skip narrow) */
+            /* Find detection closest to the target we're tracking */
             float cx = 0.0f, cy = 0.0f, best_dist = 0.0f;
             bool found = false;
             for (uint32_t i = 0; i < det->count; i++) {
-                if (det->detections[i].w < MIN_DET_W)
-                    continue;
                 float d = fabsf(det->detections[i].x - sm->track_cx) + fabsf(det->detections[i].y - sm->track_cy);
                 if (!found || d < best_dist) {
                     best_dist = d;
@@ -573,7 +536,7 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             }
             if (!found) {
                 sm->lose_counter++;
-                if (sm->lose_counter >= sm->max_lose_frames) {
+                if (sm->lose_counter >= MAX_LOSE_FRAMES) {
                     sm->lose_counter = 0;
                     prv_enter_scan_retry(sm);
                 }
@@ -585,24 +548,24 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             /* Store in sliding-window circular buffer */
             sm->calib_cx_buf[sm->calib_buf_idx] = cx;
             sm->calib_cy_buf[sm->calib_buf_idx] = cy;
-            sm->calib_buf_idx = (sm->calib_buf_idx + 1) % 3;
+            sm->calib_buf_idx = (sm->calib_buf_idx + 1) % 2;
             sm->calib_sample_count++;
 
-            /* First 2 samples: collect only, no movement */
-            if (sm->calib_sample_count < 3) {
+            /* First sample: collect only, no movement */
+            if (sm->calib_sample_count < 2) {
                 SM_PRINT("[SM] CALIBRATE: collect #%u  (%.1f,%.1f)\r\n",
                          (unsigned)sm->calib_sample_count, (double)cx, (double)cy);
                 break;
             }
 
-            /* Average the 3 values in the sliding window */
+            /* Average the 2 values in the sliding window */
             float sum_cx = 0.0f, sum_cy = 0.0f;
-            for (uint32_t i = 0; i < 3; i++) {
+            for (uint32_t i = 0; i < 2; i++) {
                 sum_cx += sm->calib_cx_buf[i];
                 sum_cy += sm->calib_cy_buf[i];
             }
-            const float cx_avg = sum_cx / 3.0f;
-            const float cy_avg = sum_cy / 3.0f;
+            const float cx_avg = sum_cx / 2.0f;
+            const float cy_avg = sum_cy / 2.0f;
             const float off_x = cx_avg - CX_TARGET;
             const float off_y = cy_avg - CY_TARGET;
 
@@ -648,7 +611,7 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             /* Servo1 remains fixed during centering */
         } else {
             sm->lose_counter++;
-            if (sm->lose_counter >= sm->max_lose_frames) {
+            if (sm->lose_counter >= MAX_LOSE_FRAMES) {
                 sm->lose_counter = 0;
                 prv_enter_scan_retry(sm);
                 SM_PRINT("[SM] CALIBRATE -> retry=%u  (lost target)\r\n",
@@ -668,23 +631,22 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
         if (has_det) {
             sm->lose_counter = 0;
 
-            /* Find detection closest to the target we're tracking (skip narrow) */
-            float cx = 0.0f, cy = 0.0f, best_dist = 0.0f;
+            /* Find detection closest to the target we're tracking */
+            float cx = 0.0f, cy = 0.0f, bb_width = 0.0f, best_dist = 0.0f;
             bool found = false;
             for (uint32_t i = 0; i < det->count; i++) {
-                if (det->detections[i].w < MIN_DET_W)
-                    continue;
                 float d = fabsf(det->detections[i].x - sm->track_cx) + fabsf(det->detections[i].y - sm->track_cy);
                 if (!found || d < best_dist) {
                     best_dist = d;
                     cx = det->detections[i].x;
                     cy = det->detections[i].y;
+                    bb_width = det->detections[i].w;
                     found = true;
                 }
             }
             if (!found) {
                 sm->lose_counter++;
-                if (sm->lose_counter >= sm->max_lose_frames) {
+                if (sm->lose_counter >= MAX_LOSE_FRAMES) {
                     sm->lose_counter = 0;
                     prv_enter_scan_retry(sm);
                 }
@@ -696,19 +658,19 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             /* Accumulate into 3-frame sliding window */
             sm->calib_cx_buf[sm->calib_buf_idx] = cx;
             sm->calib_cy_buf[sm->calib_buf_idx] = cy;
-            sm->calib_buf_idx = (sm->calib_buf_idx + 1) % 3;
-            if (sm->calib_sample_count < 3)
+            sm->calib_buf_idx = (sm->calib_buf_idx + 1) % 2;
+            if (sm->calib_sample_count < 2)
                 sm->calib_sample_count++;
 
-            /* Check drift: average 3 frames before deciding */
-            if (sm->calib_sample_count >= 3) {
+            /* Check drift: average 2 frames before deciding */
+            if (sm->calib_sample_count >= 2) {
                 float sum_cx = 0.0f, sum_cy = 0.0f;
-                for (uint32_t i = 0; i < 3; i++) {
+                for (uint32_t i = 0; i < 2; i++) {
                     sum_cx += sm->calib_cx_buf[i];
                     sum_cy += sm->calib_cy_buf[i];
                 }
-                const float cx_avg = sum_cx / 3.0f;
-                const float cy_avg = sum_cy / 3.0f;
+                const float cx_avg = sum_cx / 2.0f;
+                const float cy_avg = sum_cy / 2.0f;
                 const float off_x = cx_avg - CX_TARGET;
                 const float off_y = cy_avg - CY_TARGET;
 
@@ -722,21 +684,18 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
                 }
             }
 
-            /* Check blueberry width & TOF distance to decide approach or pickup */
-            float bb_width = det->detections[0].w;
+            /* Check blueberry width & TOF distance to decide next action */
             if (bb_width < 40.0f) {
-                /* Small — too far, start approaching */
+                /* Too far — start approaching */
                 sm->approach_step_count = 0;
                 sm->state = STATE_APPROACH;
                 SM_PRINT("[SM] CENTERED -> APPROACH  width=%.1f\r\n",
                          (double)bb_width);
-            } else if (sm->tof_distance_mm <= 50 || bb_width > 40.0f) {
+            } else if (sm->tof_distance_mm <= 50) {
                 /* Width >= 40 AND TOF <= 50mm — close enough, start pickup */
                 sm->pre_catch_servo0 = sm->cur_servo0;
                 sm->pre_catch_servo1 = sm->cur_servo1;
                 sm->pre_catch_servo2 = sm->cur_servo2;
-
-                /* Already close enough — start pickup */
                 sm->state = STATE_CATCHING;
                 SM_PRINT("[SM] CENTERED -> CATCHING  width=%.1f  tof=%u mm  "
                          "pre(servo0=%ld, servo1=%u, servo2=%u)\r\n",
@@ -746,14 +705,14 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
                          (unsigned)sm->pre_catch_servo1,
                          (unsigned)sm->pre_catch_servo2);
             } else {
-                /* Width >= 40 but TOF still > 50mm — wait, keep centred */
+                /* Width >= 40 but TOF > 50mm — wait, keep centred */
                 SM_PRINT("[SM] CENTERED  width=%.1f  tof=%u mm  (waiting for TOF <= 50)\r\n",
                          (double)bb_width,
                          (unsigned)sm->tof_distance_mm);
             }
         } else {
             sm->lose_counter++;
-            if (sm->lose_counter >= sm->max_lose_frames) {
+            if (sm->lose_counter >= MAX_LOSE_FRAMES) {
                 sm->lose_counter = 0;
                 prv_enter_scan_retry(sm);
                 SM_PRINT("[SM] CENTERED -> retry=%u  (lost target)\r\n",

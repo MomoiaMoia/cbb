@@ -156,11 +156,68 @@ static void YoloPrintResult(const YoloDetectionResult* result) {
     }
 }
 
+/* ------------------------------------------------------------------ */
+/*  Filter by minimum width                                            */
+/* ------------------------------------------------------------------ */
+void YoloApi_FilterByWidth(YoloDetectionResult* result, float min_width) {
+    uint8_t kept = 0;
+
+    for (uint8_t i = 0; i < result->count; ++i) {
+        if (result->detections[i].w >= min_width) {
+            result->detections[kept] = result->detections[i];
+            ++kept;
+        }
+    }
+
+    result->count = kept;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Filter by centre-pixel colour                                      */
+/* ------------------------------------------------------------------ */
+void YoloApi_FilterByColor(YoloDetectionResult* result,
+                           const uint8_t* rgb_image,
+                           uint32_t image_width,
+                           uint32_t image_height,
+                           uint8_t r_min, uint8_t r_max,
+                           uint8_t g_min, uint8_t g_max,
+                           uint8_t b_min, uint8_t b_max) {
+    uint8_t kept = 0;
+
+    for (uint8_t i = 0; i < result->count; ++i) {
+        const YoloDetection* det = &result->detections[i];
+
+        /* Round cx, cy to nearest integer pixel coordinate and clamp */
+        int px = (int)(det->x + 0.5f);
+        int py = (int)(det->y + 0.5f);
+        if (px < 0) px = 0;
+        if (px >= (int)image_width)  px = (int)image_width - 1;
+        if (py < 0) py = 0;
+        if (py >= (int)image_height) py = (int)image_height - 1;
+
+        /* Index into RGB888 buffer (R,G,B consecutive) */
+        const uint32_t idx = ((uint32_t)py * image_width + (uint32_t)px) * 3u;
+        const uint8_t r = rgb_image[idx];
+        const uint8_t g = rgb_image[idx + 1u];
+        const uint8_t b = rgb_image[idx + 2u];
+
+        /* Accept if all colour channels fall within specified range */
+        if (r >= r_min && r <= r_max &&
+            g >= g_min && g <= g_max &&
+            b >= b_min && b <= b_max) {
+            result->detections[kept] = *det;
+            ++kept;
+        }
+    }
+
+    result->count = kept;
+}
+
 void YoloApi_Init(YoloApi* api) {
     memset(api, 0, sizeof(*api));
 
     api->params.num_boxes = YOLO_API_NUM_BOXES;
-    api->params.conf_threshold = 0.50f;
+    api->params.conf_threshold = 0.65f;   /* 降低阈值减少漏检，由颜色过滤剔除误检 */
     api->params.iou_threshold = 0.50f;
     api->params.max_detections = YOLO_API_MAX_DETECTIONS;
 
