@@ -44,7 +44,7 @@
 /*  Calibration target (pixel coords, 0-160)                          */
 /* ------------------------------------------------------------------ */
 #define CX_TARGET 80.0f
-#define CY_TARGET 95.0f
+#define CY_TARGET 105.0f
 
 /* ------------------------------------------------------------------ */
 /*  P-controller gains & deadband                                      */
@@ -54,6 +54,12 @@
 #define DEADBAND_X 16.0f
 #define DEADBAND_Y 16.0f
 #define MAX_LOSE_FRAMES 30u   /* 连续丢失帧最大限额: 超过则退回扫描 */
+
+/* ------------------------------------------------------------------ */
+/*  Calibration sliding-window size & CATCHING width threshold         */
+/* ------------------------------------------------------------------ */
+#define CALIB_WIN_SIZE      2u         /* 滑动窗口帧数 */
+#define CATCH_WIDTH_THRESH  45.0f      /* 进入CATCHING的最小目标宽度(px) */
 
 /* ------------------------------------------------------------------ */
 /*  Local helpers                                                      */
@@ -145,35 +151,35 @@ static void smooth_move_servo2(uint8_t from, uint8_t to, uint32_t step_ms) {
  * Enter the appropriate scanning state based on sm->scan_retry.
  *
  * Retry levels:
- *   0 — keep current servo0, sweep servo2 40→110 (first retry)
- *   1 — reset servo0=45, sweep servo2 40→110 (centre + vertical)
+ *   0 — keep current servo0, sweep servo2 110→50 (first retry)
+ *   1 — reset servo0=45, sweep servo2 110→50 (centre + vertical)
  *   2 — X-scan: s0 -45→135 + s2 110→40 diagonal, then reverse
  *   After level 2 → back to level 1 (cycle)
  */
 static void prv_enter_scan_retry(StateMachine *sm) {
     switch (sm->scan_retry) {
     case 0:
-        /* Keep current servo0, start vertical sweep (bottom→up) */
-        smooth_move_servo2(sm->cur_servo2, 40, FAST_STEP_MS);
-        sm->cur_servo2 = 40;
-        sm->scan_angle = 40;
+        /* Keep current servo0, start vertical sweep (top→bottom) */
+        smooth_move_servo2(sm->cur_servo2, 110, FAST_STEP_MS);
+        sm->cur_servo2 = 110;
+        sm->scan_angle = 110;
         sm->scan_step = 5;
         sm->state = STATE_SCAN_SERVO2;
-        SM_PRINT("[SM] retry=0  servo0=%ld  SCAN_SERVO2 40->110\r\n", (long)sm->cur_servo0);
+        SM_PRINT("[SM] retry=0  servo0=%ld  SCAN_SERVO2 110->50\r\n", (long)sm->cur_servo0);
         break;
 
     case 1:
-        /* Reset to centre, restore servo1 vertical, vertical sweep (bottom→up) */
+        /* Reset to centre, restore servo1 vertical, vertical sweep (top→bottom) */
         smooth_move_servo0(sm->cur_servo0, 45, FAST_STEP_MS);
         sm->cur_servo0 = 45;
         smooth_move_servo1(sm->cur_servo1, 90, FAST_STEP_MS);
         sm->cur_servo1 = 90;
-        smooth_move_servo2(sm->cur_servo2, 40, FAST_STEP_MS);
-        sm->cur_servo2 = 40;
-        sm->scan_angle = 40;
+        smooth_move_servo2(sm->cur_servo2, 110, FAST_STEP_MS);
+        sm->cur_servo2 = 110;
+        sm->scan_angle = 110;
         sm->scan_step = 5;
         sm->state = STATE_SCAN_SERVO2;
-        SM_PRINT("[SM] retry=1  servo0=45  SCAN_SERVO2 40->110\r\n");
+        SM_PRINT("[SM] retry=1  servo0=45  SCAN_SERVO2 110->50\r\n");
         break;
 
     case 2:
@@ -317,19 +323,19 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
     case STATE_INIT:
         smooth_move_servo0(sm->cur_servo0, 45, NORMAL_STEP_MS);
         smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
-        smooth_move_servo2(sm->cur_servo2, 40, NORMAL_STEP_MS);
+        smooth_move_servo2(sm->cur_servo2, 110, NORMAL_STEP_MS);
 
         sm->cur_servo0 = 45;
         sm->cur_servo1 = 90;
-        sm->cur_servo2 = 40;
-        sm->scan_angle = 40;
+        sm->cur_servo2 = 110;
+        sm->scan_angle = 110;
         sm->scan_step = 1;
         sm->state = STATE_SCAN_SERVO2;
         SM_PRINT("[SM] INIT -> SCAN_SERVO2 (servo2=%ld deg)\r\n", (long)sm->scan_angle);
         break;
 
     /* ================================================================
-     *  SCAN_SERVO2 — vertical sweep  40° → 110°
+     *  SCAN_SERVO2 — vertical sweep  110° → 50°
      * ================================================================ */
     case STATE_SCAN_SERVO2:
         if (has_det) {
@@ -348,8 +354,8 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             break;
         }
 
-        sm->scan_angle += sm->scan_step;
-        if (sm->scan_angle > 110) {
+        sm->scan_angle -= sm->scan_step;
+        if (sm->scan_angle < 50) {
             /* Vertical sweep done — advance retry level */
             if (sm->scan_retry == 0) {
                 sm->scan_retry = 1;
@@ -548,24 +554,24 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             /* Store in sliding-window circular buffer */
             sm->calib_cx_buf[sm->calib_buf_idx] = cx;
             sm->calib_cy_buf[sm->calib_buf_idx] = cy;
-            sm->calib_buf_idx = (sm->calib_buf_idx + 1) % 2;
+            sm->calib_buf_idx = (sm->calib_buf_idx + 1) % CALIB_WIN_SIZE;
             sm->calib_sample_count++;
 
             /* First sample: collect only, no movement */
-            if (sm->calib_sample_count < 2) {
+            if (sm->calib_sample_count < CALIB_WIN_SIZE) {
                 SM_PRINT("[SM] CALIBRATE: collect #%u  (%.1f,%.1f)\r\n",
                          (unsigned)sm->calib_sample_count, (double)cx, (double)cy);
                 break;
             }
 
-            /* Average the 2 values in the sliding window */
+            /* Average the values in the sliding window */
             float sum_cx = 0.0f, sum_cy = 0.0f;
-            for (uint32_t i = 0; i < 2; i++) {
+            for (uint32_t i = 0; i < CALIB_WIN_SIZE; i++) {
                 sum_cx += sm->calib_cx_buf[i];
                 sum_cy += sm->calib_cy_buf[i];
             }
-            const float cx_avg = sum_cx / 2.0f;
-            const float cy_avg = sum_cy / 2.0f;
+            const float cx_avg = sum_cx / (float)CALIB_WIN_SIZE;
+            const float cy_avg = sum_cy / (float)CALIB_WIN_SIZE;
             const float off_x = cx_avg - CX_TARGET;
             const float off_y = cy_avg - CY_TARGET;
 
@@ -658,19 +664,19 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             /* Accumulate into 3-frame sliding window */
             sm->calib_cx_buf[sm->calib_buf_idx] = cx;
             sm->calib_cy_buf[sm->calib_buf_idx] = cy;
-            sm->calib_buf_idx = (sm->calib_buf_idx + 1) % 2;
-            if (sm->calib_sample_count < 2)
+            sm->calib_buf_idx = (sm->calib_buf_idx + 1) % CALIB_WIN_SIZE;
+            if (sm->calib_sample_count < CALIB_WIN_SIZE)
                 sm->calib_sample_count++;
 
-            /* Check drift: average 2 frames before deciding */
-            if (sm->calib_sample_count >= 2) {
+            /* Check drift: average window frames before deciding */
+            if (sm->calib_sample_count >= CALIB_WIN_SIZE) {
                 float sum_cx = 0.0f, sum_cy = 0.0f;
-                for (uint32_t i = 0; i < 2; i++) {
+                for (uint32_t i = 0; i < CALIB_WIN_SIZE; i++) {
                     sum_cx += sm->calib_cx_buf[i];
                     sum_cy += sm->calib_cy_buf[i];
                 }
-                const float cx_avg = sum_cx / 2.0f;
-                const float cy_avg = sum_cy / 2.0f;
+                const float cx_avg = sum_cx / (float)CALIB_WIN_SIZE;
+                const float cy_avg = sum_cy / (float)CALIB_WIN_SIZE;
                 const float off_x = cx_avg - CX_TARGET;
                 const float off_y = cy_avg - CY_TARGET;
 
@@ -684,31 +690,25 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
                 }
             }
 
-            /* Check blueberry width & TOF distance to decide next action */
-            if (bb_width < 40.0f) {
+            /* Check blueberry width to decide next action */
+            if (bb_width < CATCH_WIDTH_THRESH) {
                 /* Too far — start approaching */
                 sm->approach_step_count = 0;
                 sm->state = STATE_APPROACH;
                 SM_PRINT("[SM] CENTERED -> APPROACH  width=%.1f\r\n",
                          (double)bb_width);
-            } else if (sm->tof_distance_mm <= 50) {
-                /* Width >= 40 AND TOF <= 50mm — close enough, start pickup */
+            } else {
+                /* Width >= CATCH_WIDTH_THRESH — close enough, start pickup */
                 sm->pre_catch_servo0 = sm->cur_servo0;
                 sm->pre_catch_servo1 = sm->cur_servo1;
                 sm->pre_catch_servo2 = sm->cur_servo2;
                 sm->state = STATE_CATCHING;
-                SM_PRINT("[SM] CENTERED -> CATCHING  width=%.1f  tof=%u mm  "
+                SM_PRINT("[SM] CENTERED -> CATCHING  width=%.1f  "
                          "pre(servo0=%ld, servo1=%u, servo2=%u)\r\n",
                          (double)bb_width,
-                         (unsigned)sm->tof_distance_mm,
                          (long)sm->pre_catch_servo0,
                          (unsigned)sm->pre_catch_servo1,
                          (unsigned)sm->pre_catch_servo2);
-            } else {
-                /* Width >= 40 but TOF > 50mm — wait, keep centred */
-                SM_PRINT("[SM] CENTERED  width=%.1f  tof=%u mm  (waiting for TOF <= 50)\r\n",
-                         (double)bb_width,
-                         (unsigned)sm->tof_distance_mm);
             }
         } else {
             sm->lose_counter++;
@@ -767,14 +767,18 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
      *  CATCHING — pickup sequence
      *
      *  1. Close gripper gradually (缓慢闭合)
-     *  2. servo2→130°, servo1→100° (抬臂 + 抬头)
-     *  3. servo1→90° (return to vertical)
-     *  4. servo0→-135° (rotate base to drop position)
-     *  5. servo2→90° (tilt forward to drop)
-     *  6. Open gripper (松开夹爪放下目标)
+     *  2. servo2 += 20° (tilt up to clear)
+     *  3. servo1 → 90° (return to vertical)
+     *  4. servo0 → 90° (rotate base)
+     *  5. servo2 → 45° (tilt down to drop)
+     *  6. servo0 → 50° (rotate to drop position)
+     *  7. Open gripper (松开夹爪放下目标)
      * ================================================================ */
     case STATE_CATCHING: {
         SM_PRINT("[SM] CATCHING: starting pickup sequence\r\n");
+
+        servo_catch_set_pulse(1300); // slightly open gripper
+        delay_ms(100);
 
         /* Tilt servo2 up a bit before pickup to clear the target */
         {
@@ -784,42 +788,38 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             delay_ms(100);
         }
 
-        /* Close gripper gradually (缓慢闭合) */
         servo_catch_close_slow(600);
         delay_ms(200); // wait for gripper to close
 
-        /* Step 3: servo1 → 90° (return to vertical) */
-        smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
-        sm->cur_servo1 = 90;
-        delay_ms(100);
-
-        /* Step 4: servo0 → current - 45° (rotate base away) */
-        {
-            int32_t new_s0 = clamp_i32((int32_t)sm->cur_servo0 - 45, -135, 135);
-            smooth_move_servo0(sm->cur_servo0, new_s0, FAST_STEP_MS);
-            sm->cur_servo0 = new_s0;
-        }
-        delay_ms(100);
-
-        /* Step 5: servo2 → current + 20° (tilt up to clear) */
+        /* Step 1: servo2 → current + 20° (tilt up to clear) */
         {
             uint8_t new_s2 = clamp_u8((int32_t)sm->cur_servo2 + 20, 0, 180);
-            smooth_move_servo2(sm->cur_servo2, new_s2, FAST_STEP_MS);
+            smooth_move_servo2(sm->cur_servo2, new_s2, NORMAL_STEP_MS);
             sm->cur_servo2 = new_s2;
         }
         delay_ms(100);
 
-        /* Step 6: servo0 → 45° (return to centre) */
-        smooth_move_servo0(sm->cur_servo0, 45, FAST_STEP_MS);
-        sm->cur_servo0 = 45;
+        /* Step 2: servo1 → 90° (return to vertical) */
+        smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
+        sm->cur_servo1 = 90;
         delay_ms(100);
 
-        /* Step 7: servo2 → 45° (tilt down to drop position) */
-        smooth_move_servo2(sm->cur_servo2, 45, FAST_STEP_MS);
+        /* Step 3: servo0 → 90° (rotate base) */
+        smooth_move_servo0(sm->cur_servo0, 90, NORMAL_STEP_MS);
+        sm->cur_servo0 = 90;
+        delay_ms(100);
+
+        /* Step 4: servo2 → 45° (tilt down to drop position) */
+        smooth_move_servo2(sm->cur_servo2, 45, NORMAL_STEP_MS);
         sm->cur_servo2 = 45;
         delay_ms(100);
 
-        /* Step 8: Open gripper (松开夹爪放下目标) */
+        /* Step 5: servo0 → 50° (rotate to drop position) */
+        smooth_move_servo0(sm->cur_servo0, 50, FAST_STEP_MS);
+        sm->cur_servo0 = 50;
+        delay_ms(100);
+
+        /* Step 6: Open gripper (松开夹爪放下目标) */
         servo_catch_open();
         delay_ms(200); // wait for gripper to open
 

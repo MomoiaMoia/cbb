@@ -6,7 +6,7 @@
  *
  * 使用方式：
  *   1. 调用 rf433_init() 初始化
- *   2. 每帧调用 rf433_scan() 检测信号，返回 1=有信号, 0=无信号
+ *   2. 每帧调用 rf433_scan707() 检测信号，返回 1=有信号, 0=无信号
  *
  * 移植说明：
  *   - 修改 RF433_PIN_PORT 和 RF433_PIN_BIT 匹配实际引脚
@@ -29,6 +29,14 @@ void rf433_init(void);
  *
  * @return 1 - 检测到 RF 信号，0 - 无信号
  */
-int  rf433_scan(void);
+int  rf433_scan707(void);
+
+/**
+ * 快速扫描 RF 信号（P705）
+ * 在约 10ms 内密集采样引脚，检测是否有 RF 载波脉冲
+ *
+ * @return 1 - 检测到 RF 信号，0 - 无信号
+ */
+int  rf433_scan705(void);
 
 #endif /* RF433_H */

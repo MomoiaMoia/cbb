@@ -97,20 +97,20 @@ void hal_entry(void)
         R_BSP_SoftwareDelay(500, BSP_DELAY_UNITS_MILLISECONDS);
     }
 
-    /* ---- Init DL1B (VL53L1X) TOF distance sensor ---- */
-    {
-        uint8_t dl1b_retry = 0;
-        while (1) {
-            if (!dl1b_init()) {
-                printf("[TOF] DL1B init success.\r\n");
-                break;
-            }
-            dl1b_retry++;
-            printf("[TOF] DL1B init failed (retry %u), retrying...\r\n",
-                   (unsigned)dl1b_retry);
-            R_BSP_SoftwareDelay(500, BSP_DELAY_UNITS_MILLISECONDS);
-        }
-    }
+    /* ---- [TEMP DISABLED] DL1B (VL53L1X) TOF distance sensor ---- */
+    // {
+    //     uint8_t dl1b_retry = 0;
+    //     while (1) {
+    //         if (!dl1b_init()) {
+    //             printf("[TOF] DL1B init success.\r\n");
+    //             break;
+    //         }
+    //         dl1b_retry++;
+    //         printf("[TOF] DL1B init failed (retry %u), retrying...\r\n",
+    //                (unsigned)dl1b_retry);
+    //         R_BSP_SoftwareDelay(500, BSP_DELAY_UNITS_MILLISECONDS);
+    //     }
+    // }
 
     /* ---- Init IPS200 display (landscape 320x240) ---- */
     ips200_set_dir(IPS200_CROSSWISE);
@@ -206,16 +206,22 @@ void hal_entry(void)
             ips200_show_float(242, 52, det_result->detections[0].score, 1, 3);
         }
 
-        /*---- Read TOF (DL1B) distance if new data available ----*/
-        if (dl1b_finsh_flag) {
-            dl1b_finsh_flag = false;
-            /* Apply -30mm offset correction */
-            g_state_machine.tof_distance_mm = (dl1b_distance_mm >= 25) ? (dl1b_distance_mm - 25) : 0;
-        }
+        /*---- [TEMP DISABLED] TOF distance — fixed at 0 ----*/
+        // if (dl1b_finsh_flag) {
+        //     dl1b_finsh_flag = false;
+        //     g_state_machine.tof_distance_mm = (dl1b_distance_mm >= 25) ? (dl1b_distance_mm - 25) : 0;
+        // }
+        g_state_machine.tof_distance_mm = 0;
 
         /*--- RF433 remote signal check: skip state machine if no signal ---*/
-        int rf433_signal = rf433_scan();
+        int rf433_signal = rf433_scan707();
         printf("[RF433] Signal check: %d\r\n", rf433_signal);
+
+        /*--- RF433 P106 reset signal: reset state machine to INIT ---*/
+        if (rf433_scan705()) {
+            printf("[RF433] P705 signal detected, resetting state machine to INIT\r\n");
+            StateMachine_Init(&g_state_machine);
+        }
 
         /*---- RF433 status indicator (bottom-right corner) ----*/
         {

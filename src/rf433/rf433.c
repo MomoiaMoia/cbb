@@ -27,11 +27,11 @@ void rf433_init(void)
 }
 
 /**********************************************************************************************************************
- * rf433_scan
+ * rf433_scan707
  * 在 10ms 窗口内快速采样 P707 引脚，检测 RF 信号
  * 返回 1：检测到信号；0：无信号
  **********************************************************************************************************************/
-int rf433_scan(void)
+int rf433_scan707(void)
 {
     bsp_io_level_t level;
 
@@ -39,6 +39,31 @@ int rf433_scan(void)
     for (int i = 0; i < SCAN_SAMPLES; i++)
     {
         R_IOPORT_PinRead(&g_ioport_ctrl, BSP_IO_PORT_07_PIN_07, &level);
+
+        if (BSP_IO_LEVEL_HIGH == level)
+        {
+            return 1;   /* 捕获到 RF 脉冲 */
+        }
+
+        R_BSP_SoftwareDelay(SCAN_INTERVAL_US, BSP_DELAY_UNITS_MICROSECONDS);
+    }
+
+    return 0;           /* 窗口内未检测到信号 */
+}
+
+/**********************************************************************************************************************
+ * rf433_scan705
+ * 在 10ms 窗口内快速采样 P705 引脚，检测 RF 信号
+ * 返回 1：检测到信号；0：无信号
+ **********************************************************************************************************************/
+int rf433_scan705(void)
+{
+    bsp_io_level_t level;
+
+    /* 密集采样 200 次（50μs间隔），总耗时约10ms */
+    for (int i = 0; i < SCAN_SAMPLES; i++)
+    {
+        R_IOPORT_PinRead(&g_ioport_ctrl, BSP_IO_PORT_07_PIN_05, &level);
 
         if (BSP_IO_LEVEL_HIGH == level)
         {

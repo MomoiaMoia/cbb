@@ -86,7 +86,7 @@ fsp_err_t servo_catch_set_pulse(uint32_t pulse_us)
 /*******************************************************************************************************************//**
  * Open the gripper (张开).
  *
- * Fixed at 1100 µs.
+ * Fixed at 1600 µs.
  *
  * @retval FSP_SUCCESS  Gripper opened.
  **********************************************************************************************************************/
@@ -120,7 +120,7 @@ fsp_err_t servo_catch_close(void)
  **********************************************************************************************************************/
 void servo_catch_close_slow(uint32_t duration_ms)
 {
-    const uint32_t start_us = 1400;
+    const uint32_t start_us = 1300;
     const uint32_t end_us   = 2000;
     const uint32_t step_us  = 50;
     uint32_t steps = (end_us - start_us) / step_us;
