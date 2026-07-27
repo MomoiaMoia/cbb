@@ -43,9 +43,6 @@ obj/
 *.mxproject
 
 # ========== Renesas FSP / RA Specific ==========
-ra_cfg/fsp_cfg/
-ra_gen/
-script/fsp.ld
 Debug/fsp_gen.ld
 Debug/memory_regions.ld
 Debug/compile_commands.json
