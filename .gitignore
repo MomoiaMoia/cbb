@@ -22,8 +22,6 @@ obj/
 *.lib
 
 # ========== IDE / Project Files ==========
-*.launch
-*.jlink
 *.uvguix.*
 *.uvoptx
 *.uvprojx
@@ -40,8 +38,6 @@ obj/
 .vscode/tasks.json
 !.vscode/extensions.json
 !.vscode/*.code-snippets
-.cproject
-.project
 .metadata/
 *.scvd
 *.mxproject
@@ -77,13 +73,6 @@ Debug/zf_driver/
 *.stackdump
 compile_commands.json
 
-# ========== SEGGER ==========
-SEGGER_RTT/
-JLink*.log
-JLink*.txt
-JLinkRTTClient*.log
-SEGGER_RTT_*.log
-
 # ========== Python ==========
 __pycache__/
 *.py[cod]
@@ -107,6 +96,5 @@ Desktop.ini
 *.swp
 
 # ========== Logs & Temp ==========
-*.log
 *.tmp
 *.temp
