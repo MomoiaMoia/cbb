@@ -44,7 +44,7 @@
 /*  Calibration target (pixel coords, 0-160)                          */
 /* ------------------------------------------------------------------ */
 #define CX_TARGET 80.0f
-#define CY_TARGET 105.0f
+#define CY_TARGET 95.0f
 
 /* ------------------------------------------------------------------ */
 /*  P-controller gains & deadband                                      */
@@ -59,7 +59,7 @@
 /*  Calibration sliding-window size & CATCHING width threshold         */
 /* ------------------------------------------------------------------ */
 #define CALIB_WIN_SIZE      2u         /* 滑动窗口帧数 */
-#define CATCH_WIDTH_THRESH  45.0f      /* 进入CATCHING的最小目标宽度(px) */
+#define CATCH_WIDTH_THRESH  43.0f      /* 进入CATCHING的最小目标宽度(px) */
 
 /* ------------------------------------------------------------------ */
 /*  Local helpers                                                      */
@@ -160,7 +160,7 @@ static void prv_enter_scan_retry(StateMachine *sm) {
     switch (sm->scan_retry) {
     case 0:
         /* Keep current servo0, start vertical sweep (top→bottom) */
-        smooth_move_servo2(sm->cur_servo2, 110, FAST_STEP_MS);
+        smooth_move_servo2(sm->cur_servo2, 110, NORMAL_STEP_MS);
         sm->cur_servo2 = 110;
         sm->scan_angle = 110;
         sm->scan_step = 5;
@@ -170,11 +170,11 @@ static void prv_enter_scan_retry(StateMachine *sm) {
 
     case 1:
         /* Reset to centre, restore servo1 vertical, vertical sweep (top→bottom) */
-        smooth_move_servo0(sm->cur_servo0, 45, FAST_STEP_MS);
+        smooth_move_servo0(sm->cur_servo0, 45, NORMAL_STEP_MS);
         sm->cur_servo0 = 45;
-        smooth_move_servo1(sm->cur_servo1, 90, FAST_STEP_MS);
+        smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
         sm->cur_servo1 = 90;
-        smooth_move_servo2(sm->cur_servo2, 110, FAST_STEP_MS);
+        smooth_move_servo2(sm->cur_servo2, 110, NORMAL_STEP_MS);
         sm->cur_servo2 = 110;
         sm->scan_angle = 110;
         sm->scan_step = 5;
@@ -184,11 +184,11 @@ static void prv_enter_scan_retry(StateMachine *sm) {
 
     case 2:
         /* X-scan: restore servo1 vertical, start diagonal pose */
-        smooth_move_servo1(sm->cur_servo1, 90, FAST_STEP_MS);
+        smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
         sm->cur_servo1 = 90;
-        smooth_move_servo0(sm->cur_servo0, 0, FAST_STEP_MS);
+        smooth_move_servo0(sm->cur_servo0, 0, NORMAL_STEP_MS);
         sm->cur_servo0 = 0;
-        smooth_move_servo2(sm->cur_servo2, 110, FAST_STEP_MS);
+        smooth_move_servo2(sm->cur_servo2, 110, NORMAL_STEP_MS);
         sm->cur_servo2 = 110;
         sm->scan_angle = 0;
         sm->scan_step = 3;
@@ -465,11 +465,7 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             bool matched = false;
 
             if (has_det) {
-                uint32_t check_cnt = det->count;
-                if (check_cnt > 3)
-                    check_cnt = 3;
-
-                for (uint32_t i = 0; i < check_cnt; i++) {
+                for (uint32_t i = 0; i < det->count; i++) {
                     float dx = det->detections[i].x - sm->confirm_anchor_cx;
                     float dy = det->detections[i].y - sm->confirm_anchor_cy;
                     float d = sqrtf(dx * dx + dy * dy);
@@ -477,6 +473,9 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
                     if (d <= 30.0f) {
                         sm->confirm_success_count++;
                         matched = true;
+                        /* Update anchor to tracked target position */
+                        sm->confirm_anchor_cx = det->detections[i].x;
+                        sm->confirm_anchor_cy = det->detections[i].y;
                         break;
                     }
                 }
@@ -486,7 +485,7 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
                      "check=%u %s  success=%u\r\n",
                      (unsigned)sm->confirm_frame_count,
                      (double)sm->confirm_anchor_cx, (double)sm->confirm_anchor_cy,
-                     has_det ? (det->count > 3 ? 3U : det->count) : 0U,
+                     has_det ? det->count : 0U,
                      matched ? "MATCH" : (has_det ? "MISMATCH" : "MISS"),
                      (unsigned)sm->confirm_success_count);
         }
@@ -528,26 +527,9 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
         if (has_det) {
             sm->lose_counter = 0;
 
-            /* Find detection closest to the target we're tracking */
-            float cx = 0.0f, cy = 0.0f, best_dist = 0.0f;
-            bool found = false;
-            for (uint32_t i = 0; i < det->count; i++) {
-                float d = fabsf(det->detections[i].x - sm->track_cx) + fabsf(det->detections[i].y - sm->track_cy);
-                if (!found || d < best_dist) {
-                    best_dist = d;
-                    cx = det->detections[i].x;
-                    cy = det->detections[i].y;
-                    found = true;
-                }
-            }
-            if (!found) {
-                sm->lose_counter++;
-                if (sm->lose_counter >= MAX_LOSE_FRAMES) {
-                    sm->lose_counter = 0;
-                    prv_enter_scan_retry(sm);
-                }
-                break;
-            }
+            /* Use widest detection (already sorted by width in YoloApi) */
+            float cx = det->detections[0].x;
+            float cy = det->detections[0].y;
             sm->track_cx = cx;
             sm->track_cy = cy;
 
@@ -637,27 +619,10 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
         if (has_det) {
             sm->lose_counter = 0;
 
-            /* Find detection closest to the target we're tracking */
-            float cx = 0.0f, cy = 0.0f, bb_width = 0.0f, best_dist = 0.0f;
-            bool found = false;
-            for (uint32_t i = 0; i < det->count; i++) {
-                float d = fabsf(det->detections[i].x - sm->track_cx) + fabsf(det->detections[i].y - sm->track_cy);
-                if (!found || d < best_dist) {
-                    best_dist = d;
-                    cx = det->detections[i].x;
-                    cy = det->detections[i].y;
-                    bb_width = det->detections[i].w;
-                    found = true;
-                }
-            }
-            if (!found) {
-                sm->lose_counter++;
-                if (sm->lose_counter >= MAX_LOSE_FRAMES) {
-                    sm->lose_counter = 0;
-                    prv_enter_scan_retry(sm);
-                }
-                break;
-            }
+            /* Use widest detection (already sorted by width in YoloApi) */
+            float cx = det->detections[0].x;
+            float cy = det->detections[0].y;
+            float bb_width = det->detections[0].w;
             sm->track_cx = cx;
             sm->track_cy = cy;
 
@@ -766,13 +731,16 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
     /* ================================================================
      *  CATCHING — pickup sequence
      *
-     *  1. Close gripper gradually (缓慢闭合)
-     *  2. servo2 += 20° (tilt up to clear)
-     *  3. servo1 → 90° (return to vertical)
-     *  4. servo0 → 90° (rotate base)
-     *  5. servo2 → 45° (tilt down to drop)
-     *  6. servo0 → 50° (rotate to drop position)
-     *  7. Open gripper (松开夹爪放下目标)
+     *  1. Slightly open gripper (微张)
+     *  2. servo2 +10° (quick tilt up to clear)
+     *  3. Close gripper (缓慢闭合)
+     *  4. servo1 → 100° (tilt arm back)
+     *  5. servo2 +20° (tilt camera up)
+     *  6. servo0 → -60° (rotate base)
+     *  7. servo2 → 45° (tilt down to drop)
+     *  8. servo1 → 90° (return to vertical)
+     *  9. servo0 → -20° (rotate to drop position)
+     * 10. Open gripper (松开夹爪放下目标)
      * ================================================================ */
     case STATE_CATCHING: {
         SM_PRINT("[SM] CATCHING: starting pickup sequence\r\n");
@@ -791,7 +759,12 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
         servo_catch_close_slow(600);
         delay_ms(200); // wait for gripper to close
 
-        /* Step 1: servo2 → current + 20° (tilt up to clear) */
+        /* Step 1: servo1 → 100° (return to vertical) */
+        smooth_move_servo1(sm->cur_servo1, 100, NORMAL_STEP_MS);
+        sm->cur_servo1 = 100;
+        delay_ms(100);
+
+        /* Step 2: servo2 → current + 20° (tilt up to clear) */
         {
             uint8_t new_s2 = clamp_u8((int32_t)sm->cur_servo2 + 20, 0, 180);
             smooth_move_servo2(sm->cur_servo2, new_s2, NORMAL_STEP_MS);
@@ -799,14 +772,9 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
         }
         delay_ms(100);
 
-        /* Step 2: servo1 → 90° (return to vertical) */
-        smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
-        sm->cur_servo1 = 90;
-        delay_ms(100);
-
-        /* Step 3: servo0 → 90° (rotate base) */
-        smooth_move_servo0(sm->cur_servo0, 90, NORMAL_STEP_MS);
-        sm->cur_servo0 = 90;
+        /* Step 3: servo0 → -45° (rotate base) */
+        smooth_move_servo0(sm->cur_servo0, -45, NORMAL_STEP_MS);
+        sm->cur_servo0 = -45;
         delay_ms(100);
 
         /* Step 4: servo2 → 45° (tilt down to drop position) */
@@ -814,12 +782,17 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
         sm->cur_servo2 = 45;
         delay_ms(100);
 
-        /* Step 5: servo0 → 50° (rotate to drop position) */
-        smooth_move_servo0(sm->cur_servo0, 50, FAST_STEP_MS);
-        sm->cur_servo0 = 50;
+        /* Step 5: servo1 → 90° (return to vertical) */
+        smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
+        sm->cur_servo1 = 90;
         delay_ms(100);
 
-        /* Step 6: Open gripper (松开夹爪放下目标) */
+        /* Step 6: servo0 → 30° (rotate to drop position) */
+        smooth_move_servo0(sm->cur_servo0, 30, NORMAL_STEP_MS);
+        sm->cur_servo0 = 30;
+        delay_ms(200);
+
+        /* Step 7: Open gripper (松开夹爪放下目标) */
         servo_catch_open();
         delay_ms(200); // wait for gripper to open
 

@@ -90,6 +90,24 @@ static void YoloSortDetectionsByScore(YoloDetection* detections, uint32_t count)
     }
 }
 
+static void YoloSortDetectionsByWidth(YoloDetection* detections, uint32_t count) {
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t best_index = i;
+
+        for (uint32_t j = i + 1; j < count; ++j) {
+            if (detections[j].w > detections[best_index].w) {
+                best_index = j;
+            }
+        }
+
+        if (best_index != i) {
+            const YoloDetection temp = detections[i];
+            detections[i] = detections[best_index];
+            detections[best_index] = temp;
+        }
+    }
+}
+
 static void YoloStoreResult(YoloApi* api, const YoloDetection* detections, uint8_t count) {
     YoloDetectionResult* result = &api->result;
     result->count = count;
@@ -140,6 +158,7 @@ static void YoloNMS(YoloApi* api) {
         }
     }
 
+    YoloSortDetectionsByWidth(kept, kept_count);
     YoloStoreResult(api, kept, (uint8_t)kept_count);
 }
 
@@ -217,7 +236,7 @@ void YoloApi_Init(YoloApi* api) {
     memset(api, 0, sizeof(*api));
 
     api->params.num_boxes = YOLO_API_NUM_BOXES;
-    api->params.conf_threshold = 0.65f;   /* 降低阈值减少漏检，由颜色过滤剔除误检 */
+    api->params.conf_threshold = 0.55f;   /* 降低阈值减少漏检，由颜色过滤剔除误检 */
     api->params.iou_threshold = 0.50f;
     api->params.max_detections = YOLO_API_MAX_DETECTIONS;
 

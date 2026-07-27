@@ -167,12 +167,12 @@ void hal_entry(void)
         /*---- Filter: discard narrow detections ----*/
         YoloApi_FilterByWidth(det_result, 10.0f);
 
-        // /*---- Filter: check centre-pixel colour (蓝莓色域 #000000 ~ #B4DCFF) ----*/
-        // YoloApi_FilterByColor(det_result, g_rgb_corrected,
-        //                       SCC8660_W, SCC8660_H,
-        //                       0, 180,   /* R: 两端放宽 */
-        //                       0, 220,   /* G: 两端放宽 */
-        //                       0, 255);  /* B: 两端放宽 */
+        /*---- Filter: check centre-pixel colour (蓝莓色域 #000000 ~ #B4DCFF) ----*/
+        YoloApi_FilterByColor(det_result, g_rgb_corrected,
+                              SCC8660_W, SCC8660_H,
+                              0, 180,   /* R: 两端放宽 */
+                              0, 220,   /* G: 两端放宽 */
+                              0, 255);  /* B: 两端放宽 */
 
         /*---- Convert RGB888 -> RGB565 and display on IPS200 ----*/
         rgb888_to_rgb565_buffer(g_rgb_corrected, g_rgb565_buffer, SCC8660_W * SCC8660_H);
@@ -217,13 +217,26 @@ void hal_entry(void)
         int rf433_signal = rf433_scan707();
         printf("[RF433] Signal check: %d\r\n", rf433_signal);
 
-        /*--- RF433 P106 reset signal: reset state machine to INIT ---*/
-        if (rf433_scan705()) {
+        /*--- RF433 P705 reset signal: reset state machine to INIT ---*/
+        int rf433_signal_705 = rf433_scan705();
+        if (rf433_signal_705) {
             printf("[RF433] P705 signal detected, resetting state machine to INIT\r\n");
             StateMachine_Init(&g_state_machine);
         }
 
-        /*---- RF433 status indicator (bottom-right corner) ----*/
+        /*---- RF433 P705 indicator (reinit signal) ----*/
+        {
+            ips200_set_color(RGB565_WHITE, RGB565_BLACK);
+            ips200_show_string(242, 178, "Reinit:");
+            /* Yellow when signal present, green when no signal */
+            uint16 color = rf433_signal_705 ? RGB565_YELLOW : RGB565_GREEN;
+            int sx = 242, sy = 194, ex = 289, ey = 207;
+            for (int i = sy; i <= ey; i++) {
+                ips200_draw_line(sx, i, ex, i, color);
+            }
+        }
+
+        /*---- RF433 P707 status indicator (bottom-right corner) ----*/
         {
             ips200_set_color(RGB565_WHITE, RGB565_BLACK);
             ips200_show_string(242, 210, "Status:");
