@@ -3,7 +3,7 @@
 #include "yolo/image_utils.h"
 #include "yolo/yolo_api.h"
 
-#include "common_utils.h"
+// #include "common_utils.h"
 #include "zf_common_headfile.h"
 #include "zf_device_ips200.h"
 
@@ -32,25 +32,25 @@ FSP_CPP_HEADER
 void R_BSP_WarmStart(bsp_warm_start_event_t event);
 FSP_CPP_FOOTER
 
-/* Image processing buffers */
+// Image processing buffers
 static uint8_t g_rgb_buffer[RGB_BUF_SIZE] BSP_ALIGN_VARIABLE(8);
-/* Corrected RGB888 buffer (geometric distortion correction output) */
+// Corrected RGB888 buffer (geometric distortion correction output)
 static uint8_t g_rgb_corrected[RGB_BUF_SIZE] BSP_ALIGN_VARIABLE(8);
 
-/* Geometric distortion parameters (径向畸变) */
-#define GEO_K1     -0.15f    /* barrel distortion (中间鼓) */
-#define GEO_K2      0.00f    /* higher-order term */
-#define GEO_ASPECT  1.10f    /* aspect ratio correction (中心椭圆补偿) */
+// Geometric distortion parameters (径向畸变)
+#define GEO_K1     -0.15f    // barrel distortion (中间鼓)
+#define GEO_K2      0.00f    // higher-order term
+#define GEO_ASPECT  1.10f    // aspect ratio correction (中心椭圆补偿)
 
-/* RGB565 display buffer for IPS200 (160x160 image in RGB565 format) */
+// RGB565 display buffer for IPS200 (160x160 image in RGB565 format)
 static uint16_t g_rgb565_buffer[SCC8660_W * SCC8660_H] BSP_ALIGN_VARIABLE(8);
 
-/* State machine instance */
+// State machine instance
 static StateMachine g_state_machine;
 
-/* ---- debug_init() from zf_common_debug provides _write() redirect ---- */
+// debug_init() from zf_common_debug provides _write() redirect
 
-/* ---- RGB888 -> RGB565 conversion for IPS200 display ---- */
+// ---- RGB888 -> RGB565 conversion for IPS200 display ----
 static void rgb888_to_rgb565_buffer(const uint8_t *src, uint16_t *dst, int pixels)
 {
     for (int i = 0; i < pixels; i++) {
@@ -65,30 +65,30 @@ void hal_entry(void)
 {
     fsp_err_t err = FSP_SUCCESS;
 
-    /* ---- Init debug (UART9 + printf redirect from zf_common) ---- */
+    // Init debug (UART9 + printf redirect from zf_common)
     debug_init();
     printf("\r\n[INFO] hal_entry() started\r\n");
 
-    /* Open IOPORT module first — needed by IPS200 and other GPIO operations */
+    // Open IOPORT module — needed by IPS200 and other GPIO operations
     err = g_ioport.p_api->open(g_ioport.p_ctrl, g_ioport.p_cfg);
-    handle_error(err, " ** IOPORT OPEN FAILED");
+    if (FSP_SUCCESS != err) printf(" ** IOPORT OPEN FAILED\r\n");
 
-    /* Initialize NPU and YOLO */
+    // Initialize NPU and YOLO
     err = g_rm_ethosu0.p_api->open(g_rm_ethosu0.p_ctrl, g_rm_ethosu0.p_cfg);
-    handle_error(err, " ** NPU OPEN FAILED");
+    if (FSP_SUCCESS != err) printf(" ** NPU OPEN FAILED\r\n");
     static YoloApi yolo_api;
     YoloApi_Init(&yolo_api);
 
-    /* Initialize state machine */
+    // Initialize state machine
     StateMachine_Init(&g_state_machine);
     printf("[SM] StateMachine initialised\r\n");
 
-    /* Initialize peripherals: UART, SDRAM, SCC8660 camera */
+    // Initialize peripherals: UART, SDRAM, SCC8660 camera
     uint32_t frame_count = 0U;
 
     R_BSP_SdramInit(true);
 
-    /* ---- Init SCC8660 camera (soft IIC + CEU) ---- */
+    // Init SCC8660 camera (soft IIC + CEU)
     while (1) {
         if (!scc8660_init()) {
             printf("[CAM] SCC8660 init success.\r\n");
@@ -97,7 +97,7 @@ void hal_entry(void)
         R_BSP_SoftwareDelay(500, BSP_DELAY_UNITS_MILLISECONDS);
     }
 
-    /* ---- [TEMP DISABLED] DL1B (VL53L1X) TOF distance sensor ---- */
+    // [TEMP DISABLED] DL1B (VL53L1X) TOF distance sensor
     // {
     //     uint8_t dl1b_retry = 0;
     //     while (1) {
@@ -112,7 +112,7 @@ void hal_entry(void)
     //     }
     // }
 
-    /* ---- Init IPS200 display (landscape 320x240) ---- */
+    // Init IPS200 display (landscape 320x240)
     ips200_set_dir(IPS200_CROSSWISE);
     ips200_init();
     ips200_set_font(IPS200_8X16_FONT);
@@ -122,27 +122,27 @@ void hal_entry(void)
     printf("[LCD] IPS200 init success (landscape 320x240)\r\n");
     R_BSP_SoftwareDelay(500, BSP_DELAY_UNITS_MILLISECONDS);
 
-    /* Initialize RF433 remote module */
+    // Initialize RF433 remote module
     rf433_init();
     printf("[RF433] RF433 init success (P707 D0)\r\n");
 
-    /* Initialize servos and return to center */
+    // Initialize servos and return to center
     err = servo0_init();
-    handle_error(err, " ** servo0_init FAILED ** \r\n");
+    if (FSP_SUCCESS != err) printf(" ** servo0_init FAILED ** \r\n");
     err = servo1_init();
-    handle_error(err, " ** servo1_init FAILED ** \r\n");
+    if (FSP_SUCCESS != err) printf(" ** servo1_init FAILED ** \r\n");
     err = servo2_init();
-    handle_error(err, " ** servo2_init FAILED ** \r\n");
+    if (FSP_SUCCESS != err) printf(" ** servo2_init FAILED ** \r\n");
     err = servo_catch_init();
-    handle_error(err, " ** servo_catch_init FAILED ** \r\n");
+    if (FSP_SUCCESS != err) printf(" ** servo_catch_init FAILED ** \r\n");
 
     // servo0_set_angle(0);
     // servo1_set_angle(90);
     // servo2_set_angle(90);
 
-    /* Main loop: capture -> RGB -> YOLO -> state machine */
+    // Main loop: capture -> RGB -> YOLO -> state machine
     while (true) {
-        /* Wait for SCC8660 frame complete */
+        // Wait for SCC8660 frame complete
         if (!scc8660_finish_flag) {
             __WFI();
             continue;
@@ -150,36 +150,36 @@ void hal_entry(void)
         scc8660_finish_flag = false;
         frame_count++;
 
-        /* Restart capture for next frame */
+        // Restart capture for next frame
         // g_ceu0.p_api->captureStart(g_ceu0.p_ctrl, (uint8_t *)scc8660_image);
 
-        /* YUYV -> RGB888 (垂直翻转: SCC8660倒装) */
+        // YUYV -> RGB888 (vertical flip: SCC8660 inverted)
         yuyv_to_rgb888((const uint8_t *)scc8660_image, SCC8660_W, SCC8660_H,
                        g_rgb_buffer, 1);
 
-        /* Geometric distortion correction (径向畸变矫正) */
+        // Geometric distortion correction (径向畸变矫正)
         geo_correct_rgb888(g_rgb_buffer, g_rgb_corrected,
                            SCC8660_W, SCC8660_H,
                            GEO_K1, GEO_K2, GEO_ASPECT);
 
         YoloDetectionResult *det_result = YoloApi_RunYolo(&yolo_api, g_rgb_corrected);
 
-        /*---- Filter: discard narrow detections ----*/
+        // Filter: discard narrow detections
         YoloApi_FilterByWidth(det_result, 10.0f);
 
-        /*---- Filter: check centre-pixel colour (蓝莓色域 #000000 ~ #B4DCFF) ----*/
+        // Filter: check centre-pixel colour (蓝莓色域)
         YoloApi_FilterByColor(det_result, g_rgb_corrected,
                               SCC8660_W, SCC8660_H,
-                              0, 180,   /* R: 两端放宽 */
-                              0, 220,   /* G: 两端放宽 */
-                              0, 255);  /* B: 两端放宽 */
+                              0, 180,   // R
+                              0, 220,   // G
+                              0, 255);  // B
 
-        /*---- Convert RGB888 -> RGB565 and display on IPS200 ----*/
+        // Convert RGB888 -> RGB565 and display on IPS200
         rgb888_to_rgb565_buffer(g_rgb_corrected, g_rgb565_buffer, SCC8660_W * SCC8660_H);
         ips200_show_rgb565_image(0, 0, g_rgb565_buffer, SCC8660_W, SCC8660_H,
                                  240, 240, 0);
 
-        /*---- Draw detection boxes (scale 160->240, factor 1.5), clamp to [0,239] ----*/
+        // Draw detection boxes (scale 160->240, factor 1.5), clamp to [0,239]
         ips200_set_color(RGB565_GREEN, RGB565_BLACK);
         for (int i = 0; i < det_result->count; i++) {
             YoloDetection *d = &det_result->detections[i];
@@ -197,7 +197,7 @@ void hal_entry(void)
             ips200_draw_line(x1, y2, x1, y1, RGB565_GREEN);
         }
 
-        /*---- Show detection info on right side ----*/
+        // Show detection info on right side
         ips200_set_color(RGB565_WHITE, RGB565_BLACK);
         ips200_show_string(242, 0,   "Detect:");
         ips200_show_uint(242, 16, det_result->count, 2);
@@ -206,29 +206,29 @@ void hal_entry(void)
             ips200_show_float(242, 52, det_result->detections[0].score, 1, 3);
         }
 
-        /*---- [TEMP DISABLED] TOF distance — fixed at 0 ----*/
+        // [TEMP DISABLED] TOF distance — fixed at 0
         // if (dl1b_finsh_flag) {
         //     dl1b_finsh_flag = false;
         //     g_state_machine.tof_distance_mm = (dl1b_distance_mm >= 25) ? (dl1b_distance_mm - 25) : 0;
         // }
         g_state_machine.tof_distance_mm = 0;
 
-        /*--- RF433 remote signal check: skip state machine if no signal ---*/
+        // RF433 remote signal check
         int rf433_signal = rf433_scan707();
         printf("[RF433] Signal check: %d\r\n", rf433_signal);
 
-        /*--- RF433 P705 reset signal: reset state machine to INIT ---*/
+        // RF433 P705 reset signal: reset state machine to INIT
         int rf433_signal_705 = rf433_scan705();
         if (rf433_signal_705) {
             printf("[RF433] P705 signal detected, resetting state machine to INIT\r\n");
             StateMachine_Init(&g_state_machine);
         }
 
-        /*---- RF433 P705 indicator (reinit signal) ----*/
+        // RF433 P705 indicator (reinit signal)
         {
             ips200_set_color(RGB565_WHITE, RGB565_BLACK);
             ips200_show_string(242, 178, "Reinit:");
-            /* Yellow when signal present, green when no signal */
+            // Yellow=signal, green=no signal
             uint16 color = rf433_signal_705 ? RGB565_YELLOW : RGB565_GREEN;
             int sx = 242, sy = 194, ex = 289, ey = 207;
             for (int i = sy; i <= ey; i++) {
@@ -236,11 +236,11 @@ void hal_entry(void)
             }
         }
 
-        /*---- RF433 P707 status indicator (bottom-right corner) ----*/
+        // RF433 P707 status indicator (bottom-right corner)
         {
             ips200_set_color(RGB565_WHITE, RGB565_BLACK);
             ips200_show_string(242, 210, "Status:");
-            /* Draw filled rectangle (48x14) like detection box style */
+            // Draw filled rectangle (48x14)
             uint16 color = rf433_signal ? RGB565_GREEN : RGB565_RED;
             int sx = 242, sy = 226, ex = 289, ey = 239;
             for (int i = sy; i <= ey; i++) {
@@ -251,7 +251,7 @@ void hal_entry(void)
         if (!rf433_signal) {
             printf("[RF433] No signal, state machine paused.\r\n");
         } else {
-            /*--- State machine step: controls servos based on detection ---*/
+            // State machine step: controls servos based on detection
             StateMachine_Step(&g_state_machine, det_result);
         }
     }
@@ -259,18 +259,18 @@ void hal_entry(void)
     YoloApi_Deinit(&yolo_api);
 
 
-    /* Wake up 2nd core if this is first core and we are inside a multicore project. */
+    // Wake up 2nd core (multicore project)
 #if (0 == _RA_CORE) && (1 == BSP_MULTICORE_PROJECT) && !BSP_TZ_NONSECURE_BUILD
 
 #if BSP_TZ_SECURE_BUILD
-    /* Take semaphore so 2nd core can clear it */
+    // Take semaphore so 2nd core can clear it
     R_BSP_IpcSemaphoreTake(&g_core_start_semaphore);
 #endif
 
     R_BSP_SecondaryCoreStart();
 
 #if BSP_TZ_SECURE_BUILD
-    /* Wait for 2nd core to start and clear semaphore */
+    // Wait for 2nd core to start and clear semaphore
     while(FSP_ERR_IN_USE == R_BSP_IpcSemaphoreTake(&g_core_start_semaphore))
     {
         ;
@@ -279,12 +279,12 @@ void hal_entry(void)
 #endif
 
 #if (1 == _RA_CORE) && (1 == BSP_MULTICORE_PROJECT) && BSP_TZ_SECURE_BUILD
-    /* Signal to 1st core that 2nd core has started */
+    // Signal to 1st core that 2nd core has started
     R_BSP_IpcSemaphoreGive(&g_core_start_semaphore);
 #endif
 
 #if BSP_TZ_SECURE_BUILD
-    /* Enter non-secure code */
+    // Enter non-secure code
     R_BSP_NonSecureEnter();
 #endif
 }
@@ -294,7 +294,7 @@ void hal_entry(void)
 FSP_CPP_HEADER
 BSP_CMSE_NONSECURE_ENTRY void template_nonsecure_callable ();
 
-/* Trustzone Secure Projects require at least one nonsecure callable function in order to build (Remove this if it is not required to build). */
+// Trustzone requires at least one nonsecure callable function to build
 BSP_CMSE_NONSECURE_ENTRY void template_nonsecure_callable ()
 {
 

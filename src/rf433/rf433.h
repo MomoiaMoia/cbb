@@ -1,42 +1,18 @@
-/**********************************************************************************************************************
- * RF433 接收模块检测驱动
- *
- * 功能：快速检测 433MHz 无线接收模块数据引脚上的 RF 信号
- * 检测耗时：约 10ms（满足 30fps 状态机要求）
- *
- * 使用方式：
- *   1. 调用 rf433_init() 初始化
- *   2. 每帧调用 rf433_scan707() 检测信号，返回 1=有信号, 0=无信号
- *
- * 移植说明：
- *   - 修改 RF433_PIN_PORT 和 RF433_PIN_BIT 匹配实际引脚
- *   - 确保项目中已包含 IOPORT 驱动 (r_ioport)
- **********************************************************************************************************************/
+// rf433.h — 433MHz wireless receiver signal detection
+// ~10ms scan window, 50µs interval (~200 samples)
+// Usage: rf433_init() once, then rf433_scan707() / rf433_scan705() per frame
 #ifndef RF433_H
 #define RF433_H
 
 #include <stdint.h>
 
-/**
- * 初始化 RF433 模块
- * 需在 IOPORT 打开之后调用
- */
+// Initialize RF433 module (call after IOPORT open)
 void rf433_init(void);
 
-/**
- * 快速扫描 RF 信号（P707）
- * 在约 10ms 内密集采样引脚，检测是否有 RF 载波脉冲
- *
- * @return 1 - 检测到 RF 信号，0 - 无信号
- */
-int  rf433_scan707(void);
+// Scan P707 for RF carrier pulse (~10ms), returns 1=signal, 0=none
+int rf433_scan707(void);
 
-/**
- * 快速扫描 RF 信号（P705）
- * 在约 10ms 内密集采样引脚，检测是否有 RF 载波脉冲
- *
- * @return 1 - 检测到 RF 信号，0 - 无信号
- */
-int  rf433_scan705(void);
+// Scan P705 for RF carrier pulse (~10ms), returns 1=signal, 0=none
+int rf433_scan705(void);
 
 #endif /* RF433_H */

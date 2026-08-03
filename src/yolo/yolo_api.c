@@ -2,11 +2,11 @@
 
 #include <math.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#include "SEGGER_RTT/SEGGER_RTT.h"
+// #include "SEGGER_RTT/SEGGER_RTT.h"
 #include "mera/model.h"
 
 typedef struct {
@@ -14,15 +14,14 @@ typedef struct {
     int decimal_part;
 } RttFloat;
 
-extern RttFloat GetRttFloat(float value)
-{
+extern RttFloat GetRttFloat(float value) {
     RttFloat result;
     result.integer_part = (int)value;
     result.decimal_part = (int)fabsf((value - (float)result.integer_part) * 100.0f);
     return result;
 }
 
-static void YoloQuantizeInput(YoloApi* api, const uint8_t* input) {
+static void YoloQuantizeInput(YoloApi *api, const uint8_t *input) {
     for (uint32_t i = 0; i < api->input_image_size; ++i) {
         const float real = (float)input[i] / 255.0f;
         int32_t q = (int32_t)roundf(real / api->quant_params.quant_scale) + api->quant_params.quant_zp;
@@ -38,19 +37,19 @@ static void YoloQuantizeInput(YoloApi* api, const uint8_t* input) {
     }
 }
 
-static void YoloDequantizeBoxOutput(YoloApi* api) {
+static void YoloDequantizeBoxOutput(YoloApi *api) {
     for (uint32_t i = 0; i < api->output_box_size; ++i) {
         api->box_output_tensor[i] = ((int32_t)api->output_box_ptr[i] - api->quant_params.box_dequant_zp) * api->quant_params.box_dequant_scale;
     }
 }
 
-static void YoloDequantizeClsOutput(YoloApi* api) {
+static void YoloDequantizeClsOutput(YoloApi *api) {
     for (uint32_t i = 0; i < api->output_cls_size; ++i) {
         api->cls_output_tensor[i] = ((int32_t)api->output_cls_ptr[i] - api->quant_params.cls_dequant_zp) * api->quant_params.cls_dequant_scale;
     }
 }
 
-static float YoloBoxIou(const YoloDetection* a, const YoloDetection* b) {
+static float YoloBoxIou(const YoloDetection *a, const YoloDetection *b) {
     const float a_x1 = a->x - (a->w * 0.5f);
     const float a_y1 = a->y - (a->h * 0.5f);
     const float a_x2 = a->x + (a->w * 0.5f);
@@ -72,7 +71,7 @@ static float YoloBoxIou(const YoloDetection* a, const YoloDetection* b) {
     return (union_area > 0.0f) ? (inter_area / union_area) : 0.0f;
 }
 
-static void YoloSortDetectionsByScore(YoloDetection* detections, uint32_t count) {
+static void YoloSortDetectionsByScore(YoloDetection *detections, uint32_t count) {
     for (uint32_t i = 0; i < count; ++i) {
         uint32_t best_index = i;
 
@@ -90,7 +89,7 @@ static void YoloSortDetectionsByScore(YoloDetection* detections, uint32_t count)
     }
 }
 
-static void YoloSortDetectionsByWidth(YoloDetection* detections, uint32_t count) {
+static void YoloSortDetectionsByWidth(YoloDetection *detections, uint32_t count) {
     for (uint32_t i = 0; i < count; ++i) {
         uint32_t best_index = i;
 
@@ -108,8 +107,8 @@ static void YoloSortDetectionsByWidth(YoloDetection* detections, uint32_t count)
     }
 }
 
-static void YoloStoreResult(YoloApi* api, const YoloDetection* detections, uint8_t count) {
-    YoloDetectionResult* result = &api->result;
+static void YoloStoreResult(YoloApi *api, const YoloDetection *detections, uint8_t count) {
+    YoloDetectionResult *result = &api->result;
     result->count = count;
 
     for (uint32_t i = 0; i < count; ++i) {
@@ -117,7 +116,7 @@ static void YoloStoreResult(YoloApi* api, const YoloDetection* detections, uint8
     }
 }
 
-static void YoloNMS(YoloApi* api) {
+static void YoloNMS(YoloApi *api) {
     YoloDetection candidates[YOLO_API_NUM_BOXES];
     uint32_t candidate_count = 0u;
     YoloDetection kept[YOLO_API_MAX_DETECTIONS];
@@ -162,23 +161,21 @@ static void YoloNMS(YoloApi* api) {
     YoloStoreResult(api, kept, (uint8_t)kept_count);
 }
 
-static void YoloPrintResult(const YoloDetectionResult* result) {
+static void YoloPrintResult(const YoloDetectionResult *result) {
     printf("Detection Count: %u\r\n", (unsigned)result->count);
     if (result->count == 0) {
         return;
     }
     for (uint8_t i = 0; i < result->count; ++i) {
-        const YoloDetection* det = &result->detections[i];
+        const YoloDetection *det = &result->detections[i];
 
         printf("Box: (x=%.2f, y=%.2f, w=%.2f, h=%.2f), Score: %.2f\r\n",
-                          det->x, det->y, det->w, det->h, det->score);
+               det->x, det->y, det->w, det->h, det->score);
     }
 }
 
-/* ------------------------------------------------------------------ */
-/*  Filter by minimum width                                            */
-/* ------------------------------------------------------------------ */
-void YoloApi_FilterByWidth(YoloDetectionResult* result, float min_width) {
+// ---- Filter by minimum width ----
+void YoloApi_FilterByWidth(YoloDetectionResult *result, float min_width) {
     uint8_t kept = 0;
 
     for (uint8_t i = 0; i < result->count; ++i) {
@@ -191,11 +188,9 @@ void YoloApi_FilterByWidth(YoloDetectionResult* result, float min_width) {
     result->count = kept;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Filter by centre-pixel colour                                      */
-/* ------------------------------------------------------------------ */
-void YoloApi_FilterByColor(YoloDetectionResult* result,
-                           const uint8_t* rgb_image,
+// ---- Filter by centre-pixel colour ----
+void YoloApi_FilterByColor(YoloDetectionResult *result,
+                           const uint8_t *rgb_image,
                            uint32_t image_width,
                            uint32_t image_height,
                            uint8_t r_min, uint8_t r_max,
@@ -204,23 +199,27 @@ void YoloApi_FilterByColor(YoloDetectionResult* result,
     uint8_t kept = 0;
 
     for (uint8_t i = 0; i < result->count; ++i) {
-        const YoloDetection* det = &result->detections[i];
+        const YoloDetection *det = &result->detections[i];
 
-        /* Round cx, cy to nearest integer pixel coordinate and clamp */
+        // Round cx, cy to nearest integer pixel coordinate and clamp
         int px = (int)(det->x + 0.5f);
         int py = (int)(det->y + 0.5f);
-        if (px < 0) px = 0;
-        if (px >= (int)image_width)  px = (int)image_width - 1;
-        if (py < 0) py = 0;
-        if (py >= (int)image_height) py = (int)image_height - 1;
+        if (px < 0)
+            px = 0;
+        if (px >= (int)image_width)
+            px = (int)image_width - 1;
+        if (py < 0)
+            py = 0;
+        if (py >= (int)image_height)
+            py = (int)image_height - 1;
 
-        /* Index into RGB888 buffer (R,G,B consecutive) */
+        // Index into RGB888 buffer (R,G,B consecutive)
         const uint32_t idx = ((uint32_t)py * image_width + (uint32_t)px) * 3u;
         const uint8_t r = rgb_image[idx];
         const uint8_t g = rgb_image[idx + 1u];
         const uint8_t b = rgb_image[idx + 2u];
 
-        /* Accept if all colour channels fall within specified range */
+        // Accept if all colour channels fall within specified range
         if (r >= r_min && r <= r_max &&
             g >= g_min && g <= g_max &&
             b >= b_min && b <= b_max) {
@@ -232,11 +231,11 @@ void YoloApi_FilterByColor(YoloDetectionResult* result,
     result->count = kept;
 }
 
-void YoloApi_Init(YoloApi* api) {
+void YoloApi_Init(YoloApi *api) {
     memset(api, 0, sizeof(*api));
 
     api->params.num_boxes = YOLO_API_NUM_BOXES;
-    api->params.conf_threshold = 0.55f;   /* 降低阈值减少漏检，由颜色过滤剔除误检 */
+    api->params.conf_threshold = 0.55f; // Lower threshold; colour filter removes false positives
     api->params.iou_threshold = 0.50f;
     api->params.max_detections = YOLO_API_MAX_DETECTIONS;
 
@@ -256,18 +255,18 @@ void YoloApi_Init(YoloApi* api) {
     api->output_box_ptr = GetModelOutputPtr_PartitionedCall_0_70519();
     api->output_cls_ptr = GetModelOutputPtr_PartitionedCall_1_70521();
 
-    api->box_output_tensor = (float*)calloc(api->output_box_size, sizeof(float));
-    api->cls_output_tensor = (float*)calloc(api->output_cls_size, sizeof(float));
+    api->box_output_tensor = (float *)calloc(api->output_box_size, sizeof(float));
+    api->cls_output_tensor = (float *)calloc(api->output_cls_size, sizeof(float));
 }
 
-void YoloApi_Deinit(YoloApi* api) {
+void YoloApi_Deinit(YoloApi *api) {
     free(api->box_output_tensor);
     free(api->cls_output_tensor);
     api->box_output_tensor = NULL;
     api->cls_output_tensor = NULL;
 }
 
-const YoloDetectionResult* YoloApi_RunYolo(YoloApi* api, const uint8_t* input_image) {
+const YoloDetectionResult *YoloApi_RunYolo(YoloApi *api, const uint8_t *input_image) {
     YoloQuantizeInput(api, input_image);
     RunModel(false);
     YoloDequantizeBoxOutput(api);
@@ -277,6 +276,6 @@ const YoloDetectionResult* YoloApi_RunYolo(YoloApi* api, const uint8_t* input_im
     return &api->result;
 }
 
-void YoloApi_PrintLatestResult(const YoloApi* api) {
+void YoloApi_PrintLatestResult(const YoloApi *api) {
     YoloPrintResult(&api->result);
 }

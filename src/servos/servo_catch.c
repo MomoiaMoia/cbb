@@ -1,76 +1,41 @@
-/*******************************************************************************************************************//**
- * @file    servo_catch.c
- * @brief   Gripper (夹爪) control module — GPT6 PWM on P600 (GTIOCB)
- *
- * Hardware:
- *   Timer:  GPT6 (channel 6), TIMER_MODE_PWM
- *   Period: 6,000,000 counts = 20 ms (50 Hz)
- *   Output: P600 (GTIOCB)
- *   PCLK:   ~300 MHz  →  1 µs = 300 counts
- *
- * Calibration:
- *    500 µs — one direction limit
- *   1400 µs — open (张开)
- *   2000 µs — close (闭合)
- *   2500 µs — other direction limit
- **********************************************************************************************************************/
+// servo_catch.c — GPT6 PWM on P600 (GTIOCB), gripper control (夹爪)
+// Period=20ms(50Hz), PCLK~300MHz, 1µs=300cnts
+// 1400µs=open(张开), 2000µs=close(闭合)
 #include "servo_catch.h"
 
-/* ------------------------------------------------------------------ */
-/*  Local helpers                                                      */
-/* ------------------------------------------------------------------ */
+// ---- Local helpers ----
 
-/** Convert microseconds to timer counts (period = 6,000,000 @ 20 ms). */
+// Convert microseconds to timer counts (period = 6,000,000 @ 20 ms)
 #define PULSE_US(us)  ((uint32_t)((uint64_t)(us) * 6000000 / 20000))
 
-/** Write a raw pulse-width count to the GPT6 compare register (GTIOCB). */
+// Write raw pulse-width count to GPT6 compare register (GTIOCB)
 static void servo_catch_write(uint32_t pulse_counts)
 {
     R_GPT_DutyCycleSet(&g_timer6_ctrl, pulse_counts, GPT_IO_PIN_GTIOCB);
 }
 
-/* ------------------------------------------------------------------ */
-/*  Public API                                                         */
-/* ------------------------------------------------------------------ */
+// ---- Public API ----
 
-/*******************************************************************************************************************//**
- * Initialize the gripper.
- *
- * Opens GPT6, sets the initial position to open (700 µs),
- * then starts PWM output.
- *
- * @retval FSP_SUCCESS         GPT6 opened and PWM started.
- * @retval FSP_ERR_IN_USE      GPT6 already open.
- * @retval FSP_ERR_ALREADY_OPEN  GPT6 already open.
- **********************************************************************************************************************/
+// Open GPT6, set open position (1400µs), start PWM
 fsp_err_t servo_catch_init(void)
 {
     fsp_err_t status;
 
-    /* Open GPT6 timer */
     status = R_GPT_Open(&g_timer6_ctrl, &g_timer6_cfg);
     if (FSP_SUCCESS != status)
     {
         return status;
     }
 
-    /* Set open position (1400 µs) before starting to avoid a sudden jump */
+    // Set open position before starting to avoid sudden jump
     servo_catch_write(PULSE_US(1400));
 
-    /* Start PWM output */
     status = R_GPT_Start(&g_timer6_ctrl);
 
     return status;
 }
 
-/*******************************************************************************************************************//**
- * Set the gripper pulse width directly.
- *
- * @param[in]  pulse_us  Pulse width in microseconds (500 ~ 2500).
- *
- * @retval FSP_SUCCESS              Pulse width set.
- * @retval FSP_ERR_INVALID_ARGUMENT pulse_us < 500 or > 2500.
- **********************************************************************************************************************/
+// Set gripper pulse width directly (500~2500µs)
 fsp_err_t servo_catch_set_pulse(uint32_t pulse_us)
 {
     if (pulse_us < 500 || pulse_us > 2500)
@@ -83,13 +48,7 @@ fsp_err_t servo_catch_set_pulse(uint32_t pulse_us)
     return FSP_SUCCESS;
 }
 
-/*******************************************************************************************************************//**
- * Open the gripper (张开).
- *
- * Fixed at 1600 µs.
- *
- * @retval FSP_SUCCESS  Gripper opened.
- **********************************************************************************************************************/
+// Open gripper (张开), fixed at 1400µs
 fsp_err_t servo_catch_open(void)
 {
     servo_catch_set_pulse(1400);
@@ -97,13 +56,7 @@ fsp_err_t servo_catch_open(void)
     return FSP_SUCCESS;
 }
 
-/*******************************************************************************************************************//**
- * Close the gripper (闭合).
- *
- * Fixed at 2000 µs.
- *
- * @retval FSP_SUCCESS  Gripper closed.
- **********************************************************************************************************************/
+// Close gripper (闭合), fixed at 2000µs
 fsp_err_t servo_catch_close(void)
 {
     servo_catch_set_pulse(2000);
@@ -111,13 +64,7 @@ fsp_err_t servo_catch_close(void)
     return FSP_SUCCESS;
 }
 
-/*******************************************************************************************************************//**
- * Close the gripper gradually (缓慢闭合).
- *
- * Ramps from 1400 µs to 2000 µs in 50 µs steps.
- *
- * @param[in] duration_ms  Total time for the closing motion (ms).
- **********************************************************************************************************************/
+// Gradually close gripper (缓慢闭合), ramp 1300→2000µs in 50µs steps
 void servo_catch_close_slow(uint32_t duration_ms)
 {
     const uint32_t start_us = 1300;
@@ -132,6 +79,5 @@ void servo_catch_close_slow(uint32_t duration_ms)
         servo_catch_set_pulse(p);
         R_BSP_SoftwareDelay(step_delay, BSP_DELAY_UNITS_MILLISECONDS);
     }
-    /* Ensure fully closed */
     servo_catch_set_pulse(end_us);
 }

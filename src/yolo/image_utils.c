@@ -1,13 +1,11 @@
 #include "image_utils.h"
 #include "jpeg/JPEGENC.h"
 
-/* Pull in the actual JPEG encoder core (pure C) */
+// Pull in the JPEG encoder core (pure C)
 #include "jpeg/jpegenc.inl"
 
-/* ------------------------------------------------------------------ */
-/*  JPEG compress YUYV → JPEG                                         */
-/*  YUYV = [Y0, U, Y1, V]  (2 pixels per 4-byte group)               */
-/* ------------------------------------------------------------------ */
+// ---- JPEG compress YUYV → JPEG ----
+// YUYV = [Y0, U, Y1, V] (2 pixels per 4-byte group)
 int jpeg_compress_yuyv(uint8_t *pInput, int width, int height,
                        uint8_t *pOutput, int outputSize) {
     JPEGE_IMAGE jpeg;
@@ -34,45 +32,36 @@ int jpeg_compress_yuyv(uint8_t *pInput, int width, int height,
     return JPEGEncodeEnd(&jpeg);
 }
 
-/* ------------------------------------------------------------------ */
-/*  YUYV (Y0,U,Y1,V)  →  RGB888                                       */
-/*                                                                     */
-/*  YCbCr → RGB (ITU-R BT.601, fixed-point Q10):                      */
-/*    R = Y + 1.402   * (Cr - 128)                                     */
-/*    G = Y - 0.34414 * (Cb - 128) - 0.71414 * (Cr - 128)             */
-/*    B = Y + 1.772   * (Cb - 128)                                     */
-/*                                                                     */
-/*  Input YUYV:  [Y0, U, Y1, V]                                       */
-/*  Output RGB:  [R0,G0,B0, R1,G1,B1]                                 */
-/* ------------------------------------------------------------------ */
+// ---- YUYV → RGB888 (ITU-R BT.601, fixed-point Q10) ----
+// R=Y+1.402*(Cr-128), G=Y-0.344*(Cb-128)-0.714*(Cr-128), B=Y+1.772*(Cb-128)
 void yuyv_to_rgb888(const uint8_t *pInput, int width, int height,
                     uint8_t *pOutput, int flip) {
-    int row_stride = width * 2;   /* YUYV: 2 bytes/pixel */
-    int out_stride = width * 3;   /* RGB888: 3 bytes/pixel */
+int row_stride = width * 2; // YUYV: 2 bytes/pixel
+        int out_stride = width * 3; // RGB888: 3 bytes/pixel
 
     for (int row = 0; row < height; row++) {
-        /* 垂直翻转: flip=1 时从最后一行往前读 */
+        // Vertical flip: read from last row backwards when flip=1
         int src_row = flip ? (height - 1 - row) : row;
-        const uint8_t *pSrc  = pInput  + src_row * row_stride;
-        uint8_t       *pDst  = pOutput + row * out_stride;
+        const uint8_t *pSrc = pInput + src_row * row_stride;
+        uint8_t *pDst = pOutput + row * out_stride;
 
         for (int col = 0; col < width; col += 2) {
-            int y0 = (int)pSrc[0];           /* Y0     */
-            int u  = (int)pSrc[1] - 128;     /* Cb (U) */
-            int y1 = (int)pSrc[2];           /* Y1     */
-            int v  = (int)pSrc[3] - 128;     /* Cr (V) */
+            int y0 = (int)pSrc[0];      // Y0
+            int u = (int)pSrc[1] - 128; // Cb (U)
+            int y1 = (int)pSrc[2];      // Y1
+            int v = (int)pSrc[3] - 128; // Cr (V)
 
-            /* Pixel 0: Y0 + U/V */
+            // Pixel 0: Y0 + U/V
             int r0 = y0 + ((1436 * v + 512) >> 10);
             int g0 = y0 - ((352 * u + 731 * v + 512) >> 10);
             int b0 = y0 + ((1815 * u + 512) >> 10);
 
-            /* Pixel 1: Y1 + U/V (same U, V) */
+            // Pixel 1: Y1 + U/V (same U, V)
             int r1 = y1 + ((1436 * v + 512) >> 10);
             int g1 = y1 - ((352 * u + 731 * v + 512) >> 10);
             int b1 = y1 + ((1815 * u + 512) >> 10);
 
-            /* Clamp & store */
+            // Clamp & store
             pDst[0] = (uint8_t)(r0 < 0 ? 0 : (r0 > 255 ? 255 : r0));
             pDst[1] = (uint8_t)(g0 < 0 ? 0 : (g0 > 255 ? 255 : g0));
             pDst[2] = (uint8_t)(b0 < 0 ? 0 : (b0 > 255 ? 255 : b0));
@@ -86,28 +75,26 @@ void yuyv_to_rgb888(const uint8_t *pInput, int width, int height,
     }
 }
 
-/* ------------------------------------------------------------------ */
-/*  Geometric distortion correction (径向畸变矫正)                     */
-/* ------------------------------------------------------------------ */
+// ---- Geometric distortion correction (径向畸变矫正) ----
 void geo_correct_rgb888(const uint8_t *src, uint8_t *dst,
                         int width, int height,
-                        float k1, float k2, float aspect)
-{
-    /* Optical centre = image centre */
-    const float cx = (width  - 1) * 0.5f;
+                        float k1, float k2, float aspect) {
+    // Optical centre = image centre
+    const float cx = (width - 1) * 0.5f;
     const float cy = (height - 1) * 0.5f;
     const float max_r2 = cx * cx + cy * cy;
-    if (max_r2 < 1.0f) return;
+    if (max_r2 < 1.0f)
+        return;
 
-    const int stride = width * 3;   /* RGB888 bytes per row */
+    const int stride = width * 3; // RGB888 bytes per row
 
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            /* Normalised offset from optical centre */
+            // Normalised offset from optical centre
             float dx = (float)x - cx;
             float dy = (float)y - cy;
 
-            /* Apply aspect-ratio pre-correction */
+            // Apply aspect-ratio pre-correction
             dx /= aspect;
 
             float r2 = (dx * dx + dy * dy) / max_r2;
@@ -116,21 +103,29 @@ void geo_correct_rgb888(const uint8_t *src, uint8_t *dst,
             float src_x = cx + dx * scale;
             float src_y = cy + dy * scale;
 
-            /* ---- Bilinear interpolation ---- */
+            // Bilinear interpolation
             int x0 = (int)src_x;
             int y0 = (int)src_y;
             int x1 = x0 + 1;
             int y1 = y0 + 1;
 
-            /* Clamp to image bounds */
-            if (x0 < 0)   x0 = 0;
-            if (x0 >= width)  x0 = width - 1;
-            if (x1 < 0)   x1 = 0;
-            if (x1 >= width)  x1 = width - 1;
-            if (y0 < 0)   y0 = 0;
-            if (y0 >= height) y0 = height - 1;
-            if (y1 < 0)   y1 = 0;
-            if (y1 >= height) y1 = height - 1;
+            // Clamp to image bounds
+            if (x0 < 0)
+                x0 = 0;
+            if (x0 >= width)
+                x0 = width - 1;
+            if (x1 < 0)
+                x1 = 0;
+            if (x1 >= width)
+                x1 = width - 1;
+            if (y0 < 0)
+                y0 = 0;
+            if (y0 >= height)
+                y0 = height - 1;
+            if (y1 < 0)
+                y1 = 0;
+            if (y1 >= height)
+                y1 = height - 1;
 
             const uint8_t *p00 = src + y0 * stride + x0 * 3;
             const uint8_t *p10 = src + y0 * stride + x1 * 3;
@@ -143,31 +138,19 @@ void geo_correct_rgb888(const uint8_t *src, uint8_t *dst,
             uint8_t *out = dst + y * stride + x * 3;
 
             for (int c = 0; c < 3; c++) {
-                float v = (1.0f - fx) * (1.0f - fy) * (float)p00[c]
-                        +        fx  * (1.0f - fy) * (float)p10[c]
-                        + (1.0f - fx) *        fy   * (float)p01[c]
-                        +        fx  *        fy   * (float)p11[c];
+                float v = (1.0f - fx) * (1.0f - fy) * (float)p00[c] + fx * (1.0f - fy) * (float)p10[c] + (1.0f - fx) * fy * (float)p01[c] + fx * fy * (float)p11[c];
                 out[c] = (uint8_t)(v + 0.5f);
             }
         }
     }
 }
 
-/* ------------------------------------------------------------------ */
-/*  Unsharp-mask sharpening                                            */
-/* ------------------------------------------------------------------ */
+// ---- Unsharp-mask sharpening ----
 void unsharp_mask_rgb888(const uint8_t *src, uint8_t *dst,
                          int width, int height, float amount,
-                         uint8_t *work_buffer)
-{
-    /*
-     * 3×3 Gaussian kernel (σ≈0.8):
-     *   [1  2  1]
-     *   [2  4  2]  / 16
-     *   [1  2  1]
-     *
-     * Step 1 — convolve src → work_buffer
-     */
+                         uint8_t *work_buffer) {
+    // 3×3 Gaussian kernel (σ≈0.8): [1 2 1; 2 4 2; 1 2 1] / 16
+    // Step 1: convolve src → work_buffer
     const int stride = width * 3;
     const int last_col = width - 1;
     const int last_row = height - 1;
@@ -177,7 +160,7 @@ void unsharp_mask_rgb888(const uint8_t *src, uint8_t *dst,
             uint8_t *wrk = work_buffer + y * stride + x * 3;
             const uint8_t *p;
 
-            /* ---- Row y-1 ---- */
+            // Row y-1
             int sy = (y > 0) ? y - 1 : 0;
             p = src + sy * stride + x * 3;
             if (x > 0) {
@@ -202,7 +185,7 @@ void unsharp_mask_rgb888(const uint8_t *src, uint8_t *dst,
                 wrk[2] += (p[2] * 1);
             }
 
-            /* ---- Row y ---- */
+            // Row y
             p = src + y * stride + x * 3;
             if (x > 0) {
                 wrk[0] += (p[-3] * 2);
@@ -226,7 +209,7 @@ void unsharp_mask_rgb888(const uint8_t *src, uint8_t *dst,
                 wrk[2] += (p[2] * 2);
             }
 
-            /* ---- Row y+1 ---- */
+            // Row y+1
             sy = (y < last_row) ? y + 1 : last_row;
             p = src + sy * stride + x * 3;
             if (x > 0) {
@@ -251,25 +234,24 @@ void unsharp_mask_rgb888(const uint8_t *src, uint8_t *dst,
                 wrk[2] += (p[2] * 1);
             }
 
-            /* Divide by 16 */
+            // Divide by 16
             wrk[0] >>= 4;
             wrk[1] >>= 4;
             wrk[2] >>= 4;
         }
     }
 
-    /*
-     * Step 2 — dst = src + amount * (src - blurred)
-     *          amount is converted to Q8.8 fixed-point for speed
-     */
+    // Step 2: dst = src + amount*(src - blurred), amount in Q8.8 fixed-point
     int amount_q8 = (int)(amount * 256.0f);
     int total = width * height * 3;
 
     for (int i = 0; i < total; i++) {
         int diff = (int)src[i] - (int)work_buffer[i];
-        int val  = (int)src[i] + ((amount_q8 * diff) >> 8);
-        if (val < 0)   val = 0;
-        if (val > 255) val = 255;
+        int val = (int)src[i] + ((amount_q8 * diff) >> 8);
+        if (val < 0)
+            val = 0;
+        if (val > 255)
+            val = 255;
         dst[i] = (uint8_t)val;
     }
 }
