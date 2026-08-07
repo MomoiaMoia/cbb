@@ -10,6 +10,7 @@
 #include "servos/servo0.h"
 #include "servos/servo1.h"
 #include "servos/servo2.h"
+#include "servos/servo3.h"
 #include "servos/servo_catch.h"
 
 #include "control/state_machine.h"
@@ -126,19 +127,20 @@ void hal_entry(void)
     rf433_init();
     printf("[RF433] RF433 init success (P707 D0)\r\n");
 
-    // Initialize servos and return to center
+    // Initialize servos
+    // Servo0: 270° pan (GPT1 GTIOCA), Servo1: 180° shoulder (GPT1 GTIOCB) fixed at 90°
+    // Servo2: 180° tilt (GPT5 GTIOCB), Servo3: telescopic (GPT6 GTIOCB)
+    // Servo Catch: scoop claw (GPT7 GTIOCA)
     err = servo0_init();
     if (FSP_SUCCESS != err) printf(" ** servo0_init FAILED ** \r\n");
     err = servo1_init();
     if (FSP_SUCCESS != err) printf(" ** servo1_init FAILED ** \r\n");
     err = servo2_init();
     if (FSP_SUCCESS != err) printf(" ** servo2_init FAILED ** \r\n");
+    err = servo3_init();
+    if (FSP_SUCCESS != err) printf(" ** servo3_init FAILED ** \r\n");
     err = servo_catch_init();
     if (FSP_SUCCESS != err) printf(" ** servo_catch_init FAILED ** \r\n");
-
-    // servo0_set_angle(0);
-    // servo1_set_angle(90);
-    // servo2_set_angle(90);
 
     // Main loop: capture -> RGB -> YOLO -> state machine
     while (true) {
@@ -155,7 +157,7 @@ void hal_entry(void)
 
         // YUYV -> RGB888 (vertical flip: SCC8660 inverted)
         yuyv_to_rgb888((const uint8_t *)scc8660_image, SCC8660_W, SCC8660_H,
-                       g_rgb_buffer, 1);
+                       g_rgb_buffer, 0);
 
         // Geometric distortion correction (径向畸变矫正)
         geo_correct_rgb888(g_rgb_buffer, g_rgb_corrected,
@@ -211,25 +213,25 @@ void hal_entry(void)
         //     dl1b_finsh_flag = false;
         //     g_state_machine.tof_distance_mm = (dl1b_distance_mm >= 25) ? (dl1b_distance_mm - 25) : 0;
         // }
-        g_state_machine.tof_distance_mm = 0;
+        // g_state_machine.tof_distance_mm = 0;
 
         // RF433 remote signal check
         int rf433_signal = rf433_scan707();
         printf("[RF433] Signal check: %d\r\n", rf433_signal);
 
-        // RF433 P705 reset signal: reset state machine to INIT
-        int rf433_signal_705 = rf433_scan705();
-        if (rf433_signal_705) {
-            printf("[RF433] P705 signal detected, resetting state machine to INIT\r\n");
+        // RF433 P706 reset signal: reset state machine to INIT
+        int rf433_signal_706 = rf433_scan706();
+        if (rf433_signal_706) {
+            printf("[RF433] P706 signal detected, resetting state machine to INIT\r\n");
             StateMachine_Init(&g_state_machine);
         }
 
-        // RF433 P705 indicator (reinit signal)
+        // RF433 P706 indicator (reinit signal)
         {
             ips200_set_color(RGB565_WHITE, RGB565_BLACK);
             ips200_show_string(242, 178, "Reinit:");
             // Yellow=signal, green=no signal
-            uint16 color = rf433_signal_705 ? RGB565_YELLOW : RGB565_GREEN;
+            uint16 color = rf433_signal_706 ? RGB565_YELLOW : RGB565_GREEN;
             int sx = 242, sy = 194, ex = 289, ey = 207;
             for (int i = sy; i <= ey; i++) {
                 ips200_draw_line(sx, i, ex, i, color);

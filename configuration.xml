@@ -662,8 +662,8 @@
       <property id="module.driver.timer.gtiocb_disable_setting" value="module.driver.timer.gtiocb_disable_setting.gtioc_disable_prohibited"/>
     </module>
     <module id="module.driver.timer_on_gpt.1912014111">
-      <property id="module.driver.timer.name" value="g_timer5"/>
-      <property id="module.driver.timer.channel" value="5"/>
+      <property id="module.driver.timer.name" value="g_timer8"/>
+      <property id="module.driver.timer.channel" value="8"/>
       <property id="module.driver.timer.mode" value="module.driver.timer.mode.mode_pwm"/>
       <property id="module.driver.timer.period" value="50"/>
       <property id="module.driver.timer.compare_match.a.status" value="module.driver.timer.compare_match.a.status.disabled"/>
@@ -821,6 +821,72 @@
       <property id="module.driver.spi.tx_fifo_trigger" value="module.driver.spi.tx_fifo_trigger.0"/>
       <property id="module.driver.spi.rx_sampling_delay" value="module.driver.spi.rx_sampling_delay.0"/>
     </module>
+    <module id="module.driver.timer_on_gpt.960758250">
+      <property id="module.driver.timer.name" value="g_timer7"/>
+      <property id="module.driver.timer.channel" value="7"/>
+      <property id="module.driver.timer.mode" value="module.driver.timer.mode.mode_pwm"/>
+      <property id="module.driver.timer.period" value="50"/>
+      <property id="module.driver.timer.compare_match.a.status" value="module.driver.timer.compare_match.a.status.disabled"/>
+      <property id="module.driver.timer.compare_match.a.value" value="0x10000"/>
+      <property id="module.driver.timer.compare_match.b.status" value="module.driver.timer.compare_match.b.status.disabled"/>
+      <property id="module.driver.timer.compare_match.b.value" value="0x10000"/>
+      <property id="module.driver.timer.compare_match.c.status" value="module.driver.timer.compare_match.c.status.disabled"/>
+      <property id="module.driver.timer.compare_match.c.value" value="0x10000"/>
+      <property id="module.driver.timer.compare_match.d.status" value="module.driver.timer.compare_match.d.status.disabled"/>
+      <property id="module.driver.timer.compare_match.d.value" value="0x10000"/>
+      <property id="module.driver.timer.compare_match.e.status" value="module.driver.timer.compare_match.e.status.disabled"/>
+      <property id="module.driver.timer.compare_match.e.value" value="0x10000"/>
+      <property id="module.driver.timer.compare_match.f.status" value="module.driver.timer.compare_match.f.status.disabled"/>
+      <property id="module.driver.timer.compare_match.f.value" value="0x10000"/>
+      <property id="module.driver.timer.unit" value="module.driver.timer.unit.unit_frequency_hz"/>
+      <property id="module.driver.timer.gtior.gtioa.initial_output_level" value="module.driver.timer.gtior.gtioa.initial_output_level.low"/>
+      <property id="module.driver.timer.gtior.gtioa.cycle_end_output_level" value="module.driver.timer.gtior.gtioa.cycle_end_output_level.retain"/>
+      <property id="module.driver.timer.gtior.gtioa.compare_match_output_level" value="module.driver.timer.gtior.gtioa.compare_match_output_level.retain"/>
+      <property id="module.driver.timer.gtior.gtioa.count_stop_retain" value="module.driver.timer.gtior.gtioa.count_stop_retain.disabled"/>
+      <property id="module.driver.timer.gtior.gtiob.initial_output_level" value="module.driver.timer.gtior.gtiob.initial_output_level.low"/>
+      <property id="module.driver.timer.gtior.gtiob.cycle_end_output_level" value="module.driver.timer.gtior.gtiob.cycle_end_output_level.retain"/>
+      <property id="module.driver.timer.gtior.gtiob.compare_match_output_level" value="module.driver.timer.gtior.gtiob.compare_match_output_level.retain"/>
+      <property id="module.driver.timer.gtior.gtiob.count_stop_retain" value="module.driver.timer.gtior.gtiob.count_stop_retain.disabled"/>
+      <property id="module.driver.timer.gtior.custom_waveform_enable" value="module.driver.timer.gtior.custom_waveform_enable.disabled"/>
+      <property id="module.driver.timer.duty_cycle" value="50"/>
+      <property id="module.driver.timer.gtioca_output_enabled" value="module.driver.timer.gtioca_output_enabled.true"/>
+      <property id="module.driver.timer.gtioca_stop_level" value="module.driver.timer.gtioca_stop_level.pin_level_low"/>
+      <property id="module.driver.timer.gtiocb_output_enabled" value="module.driver.timer.gtiocb_output_enabled.false"/>
+      <property id="module.driver.timer.gtiocb_stop_level" value="module.driver.timer.gtiocb_stop_level.pin_level_low"/>
+      <property id="module.driver.timer.count_up_source" value=""/>
+      <property id="module.driver.timer.count_down_source" value=""/>
+      <property id="module.driver.timer.start_source" value=""/>
+      <property id="module.driver.timer.stop_source" value=""/>
+      <property id="module.driver.timer.clear_source" value=""/>
+      <property id="module.driver.timer.capture_a_source" value=""/>
+      <property id="module.driver.timer.capture_b_source" value=""/>
+      <property id="module.driver.timer.gtioca_filter" value="module.driver.timer.gtioc_filter.gtioc_filter_none"/>
+      <property id="module.driver.timer.gtiocb_filter" value="module.driver.timer.gtioc_filter.gtioc_filter_none"/>
+      <property id="module.driver.timer.gtioca_polarity" value="module.driver.timer.gtioc_polarity.normal"/>
+      <property id="module.driver.timer.gtiocb_polarity" value="module.driver.timer.gtioc_polarity.normal"/>
+      <property id="module.driver.timer.p_callback" value="NULL"/>
+      <property id="module.driver.timer.ipl" value="_disabled"/>
+      <property id="module.driver.timer.capture_a_ipl" value="_disabled"/>
+      <property id="module.driver.timer.capture_b_ipl" value="_disabled"/>
+      <property id="module.driver.timer.compare_match_c_ipl" value="_disabled"/>
+      <property id="module.driver.timer.compare_match_d_ipl" value="_disabled"/>
+      <property id="module.driver.timer.compare_match_e_ipl" value="_disabled"/>
+      <property id="module.driver.timer.compare_match_f_ipl" value="_disabled"/>
+      <property id="module.driver.timer.trough_ipl" value="_disabled"/>
+      <property id="module.driver.timer.extra" value="module.driver.timer.extra.disabled"/>
+      <property id="module.driver.timer.poeg_link" value="enum.driver.poeg.channels.poeg_link_poeg0"/>
+      <property id="module.driver.timer.output_disable" value=""/>
+      <property id="module.driver.timer.adc_trigger" value=""/>
+      <property id="module.driver.timer.adc_a_compare_match" value="0"/>
+      <property id="module.driver.timer.adc_b_compare_match" value="0"/>
+      <property id="module.driver.timer.dead_time_count_up" value="0"/>
+      <property id="module.driver.timer.dead_time_count_down" value="0"/>
+      <property id="module.driver.timer.interrupt_skip.source" value="module.driver.timer.interrupt_skip.source.none"/>
+      <property id="module.driver.timer.interrupt_skip.count" value="module.driver.timer.interrupt_skip.count.count_0"/>
+      <property id="module.driver.timer.interrupt_skip.adc" value="module.driver.timer.interrupt_skip.skip_sources.interrupt_skip.adc.none"/>
+      <property id="module.driver.timer.gtioca_disable_setting" value="module.driver.timer.gtioca_disable_setting.gtioc_disable_prohibited"/>
+      <property id="module.driver.timer.gtiocb_disable_setting" value="module.driver.timer.gtiocb_disable_setting.gtioc_disable_prohibited"/>
+    </module>
     <context id="_hal.0">
       <stack module="module.driver.ioport_on_ioport.0"/>
       <stack module="module.google.tflm.core.lib.236351613">
@@ -846,6 +912,7 @@
       <stack module="module.driver.timer_on_gpt.910108752"/>
       <stack module="module.driver.external_irq_on_icu.143581952"/>
       <stack module="module.driver.spi_on_sci_b_spi.292627927"/>
+      <stack module="module.driver.timer_on_gpt.960758250"/>
     </context>
     <config id="config.driver.sci_b_uart">
       <property id="config.driver.sci_b_uart.param_checking_enable" value="config.driver.sci_b_uart.param_checking_enable.bsp"/>
@@ -895,10 +962,12 @@
       <configSetting altId="gpt1.gtioc1a.p105" configurationId="gpt1.gtioc1a"/>
       <configSetting altId="gpt1.gtioc1b.p104" configurationId="gpt1.gtioc1b"/>
       <configSetting altId="gpt1.mode.gtiocaorgtiocb.free" configurationId="gpt1.mode"/>
-      <configSetting altId="gpt5.gtioc5b.p914" configurationId="gpt5.gtioc5b"/>
-      <configSetting altId="gpt5.mode.gtiocaorgtiocb.free" configurationId="gpt5.mode"/>
       <configSetting altId="gpt6.gtioc6b.p600" configurationId="gpt6.gtioc6b"/>
       <configSetting altId="gpt6.mode.gtiocaorgtiocb.free" configurationId="gpt6.mode"/>
+      <configSetting altId="gpt7.gtioc7a.p304" configurationId="gpt7.gtioc7a"/>
+      <configSetting altId="gpt7.mode.gtiocaorgtiocb.free" configurationId="gpt7.mode"/>
+      <configSetting altId="gpt8.gtioc8b.p106" configurationId="gpt8.gtioc8b"/>
+      <configSetting altId="gpt8.mode.gtiocaorgtiocb.free" configurationId="gpt8.mode"/>
       <configSetting altId="irq.irq26.p704" configurationId="irq.irq26"/>
       <configSetting altId="irq.mode.custom.free" configurationId="irq.mode"/>
       <configSetting altId="jtag_fslash_swd.mode.swd.free" configurationId="jtag_fslash_swd.mode"/>
@@ -908,6 +977,8 @@
       <configSetting altId="p104.gpio_mode.gpio_mode_peripheral" configurationId="p104.gpio_mode"/>
       <configSetting altId="p105.gpt1.gtioc1a" configurationId="p105"/>
       <configSetting altId="p105.gpio_mode.gpio_mode_peripheral" configurationId="p105.gpio_mode"/>
+      <configSetting altId="p106.gpt8.gtioc8b" configurationId="p106"/>
+      <configSetting altId="p106.gpio_mode.gpio_mode_peripheral" configurationId="p106.gpio_mode"/>
       <configSetting altId="p208.sci9.rxd9" configurationId="p208"/>
       <configSetting altId="p208.gpio_mode.gpio_mode_peripheral" configurationId="p208.gpio_mode"/>
       <configSetting altId="p209.sci9.txd9" configurationId="p209"/>
@@ -916,6 +987,8 @@
       <configSetting altId="p210.gpio_mode.gpio_mode_peripheral" configurationId="p210.gpio_mode"/>
       <configSetting altId="p211.jtag_fslash_swd.swclk" configurationId="p211"/>
       <configSetting altId="p211.gpio_mode.gpio_mode_peripheral" configurationId="p211.gpio_mode"/>
+      <configSetting altId="p304.gpt7.gtioc7a" configurationId="p304"/>
+      <configSetting altId="p304.gpio_mode.gpio_mode_peripheral" configurationId="p304.gpio_mode"/>
       <configSetting altId="p400.ceu.vio_d0" configurationId="p400"/>
       <configSetting altId="p400.gpio_mode.gpio_mode_peripheral" configurationId="p400.gpio_mode"/>
       <configSetting altId="p401.ceu.vio_d1" configurationId="p401"/>
@@ -958,16 +1031,14 @@
       <configSetting altId="p704.irq.irq26" configurationId="p704"/>
       <configSetting altId="p704.gpio_irq.gpio_irq_enabled" configurationId="p704.gpio_irq"/>
       <configSetting altId="p704.gpio_mode.gpio_mode_irq" configurationId="p704.gpio_mode"/>
-      <configSetting altId="p705.input" configurationId="p705"/>
-      <configSetting altId="p705.gpio_mode.gpio_mode_in" configurationId="p705.gpio_mode"/>
-      <configSetting altId="p705.gpio_pupd.gpio_pupd_ip_up" configurationId="p705.gpio_pupd"/>
+      <configSetting altId="p706.input" configurationId="p706"/>
+      <configSetting altId="p706.gpio_mode.gpio_mode_in" configurationId="p706.gpio_mode"/>
+      <configSetting altId="p706.gpio_pupd.gpio_pupd_ip_up" configurationId="p706.gpio_pupd"/>
       <configSetting altId="p707.input" configurationId="p707"/>
       <configSetting altId="p707.gpio_mode.gpio_mode_in" configurationId="p707.gpio_mode"/>
       <configSetting altId="p707.gpio_pupd.gpio_pupd_ip_up" configurationId="p707.gpio_pupd"/>
       <configSetting altId="p708.ceu.vio_vd" configurationId="p708"/>
       <configSetting altId="p708.gpio_mode.gpio_mode_peripheral" configurationId="p708.gpio_mode"/>
-      <configSetting altId="p914.gpt5.gtioc5b" configurationId="p914"/>
-      <configSetting altId="p914.gpio_mode.gpio_mode_peripheral" configurationId="p914.gpio_mode"/>
       <configSetting altId="pb00.output.high" configurationId="pb00"/>
       <configSetting altId="pb00.gpio_speed.gpio_speed_hh" configurationId="pb00.gpio_drivecapacity"/>
       <configSetting altId="pb00.gpio_mode.gpio_mode_out.high" configurationId="pb00.gpio_mode"/>

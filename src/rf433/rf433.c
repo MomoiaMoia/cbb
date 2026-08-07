@@ -28,12 +28,12 @@ int rf433_scan707(void) {
     return 0;
 }
 
-// Dense-sample P705 pin over 10ms window, return 1 on first HIGH
-int rf433_scan705(void) {
+// Dense-sample P706 pin over 10ms window, return 1 on first HIGH
+int rf433_scan706(void) {
     bsp_io_level_t level;
 
     for (int i = 0; i < SCAN_SAMPLES; i++) {
-        R_IOPORT_PinRead(&g_ioport_ctrl, BSP_IO_PORT_07_PIN_05, &level);
+        R_IOPORT_PinRead(&g_ioport_ctrl, BSP_IO_PORT_07_PIN_06, &level);
 
         if (BSP_IO_LEVEL_HIGH == level) {
             return 1;

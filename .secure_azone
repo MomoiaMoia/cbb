@@ -5,12 +5,16 @@
         <peripheral name="PORT1.CPU0" group="PORT">
             <slot name="P104.CPU0" secure="true"/>
             <slot name="P105.CPU0" secure="true"/>
+            <slot name="P106.CPU0" secure="true"/>
         </peripheral>
         <peripheral name="PORT2.CPU0" group="PORT">
             <slot name="P208.CPU0" secure="true"/>
             <slot name="P209.CPU0" secure="true"/>
             <slot name="P210.CPU0" secure="true"/>
             <slot name="P211.CPU0" secure="true"/>
+        </peripheral>
+        <peripheral name="PORT3.CPU0" group="PORT">
+            <slot name="P304.CPU0" secure="true"/>
         </peripheral>
         <peripheral name="PORT4.CPU0" group="PORT">
             <slot name="P400.CPU0" secure="true"/>
@@ -36,12 +40,9 @@
             <slot name="P702.CPU0" secure="true"/>
             <slot name="P703.CPU0" secure="true"/>
             <slot name="P704.CPU0" secure="true"/>
-            <slot name="P705.CPU0" secure="true"/>
+            <slot name="P706.CPU0" secure="true"/>
             <slot name="P707.CPU0" secure="true"/>
             <slot name="P708.CPU0" secure="true"/>
-        </peripheral>
-        <peripheral name="PORT9.CPU0" group="PORT">
-            <slot name="P914.CPU0" secure="true"/>
         </peripheral>
         <peripheral name="PORTB.CPU0" group="PORT">
             <slot name="PB00.CPU0" secure="true"/>
@@ -52,11 +53,12 @@
         </peripheral>
         <peripheral name="CEU.CPU0" security="s"/>
         <peripheral name="GPT1.CPU0" group="GPT" security="s"/>
-        <peripheral name="GPT5.CPU0" group="GPT" security="s"/>
+        <peripheral name="GPT8.CPU0" group="GPT" security="s"/>
         <peripheral name="GPT6.CPU0" group="GPT" security="s"/>
         <peripheral name="ICU_EXT_IRQ.CPU0">
             <slot name="ICU_EXT_IRQ26.CPU0" secure="true"/>
         </peripheral>
+        <peripheral name="GPT7.CPU0" group="GPT" security="s"/>
         <peripheral name="ICU.CPU0">
             <slot name="IRQ0.CPU0" secure="true"/>
             <slot name="IRQ1.CPU0" secure="true"/>

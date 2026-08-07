@@ -1,6 +1,7 @@
 // state_machine.h — Blueberry-picking state machine
 // States: INIT → SCAN_SERVO2 → SCAN_SERVO0 → CONFIRM → CALIBRATE → CENTERED → APPROACH → CATCHING → HALTING
-// Servo0=pan(-135~+135), Servo1=shoulder(0~180), Servo2=tilt(0~180)
+// Servo0=pan(-135~+135), Servo2=tilt(0~180), Servo3=telescopic(0~15cm)
+// Servo1 (shoulder) fixed at 90° by hal init
 #ifndef STATE_MACHINE_H_
 #define STATE_MACHINE_H_
 
@@ -17,8 +18,8 @@ typedef enum {
     STATE_CALIBRATE,   // P-controller centering via servo0 & servo2
     STATE_CENTERED,    // Target centered, monitor drift/loss
     STATE_APPROACH,    // Move arm forward toward target
-    STATE_CATCHING,    // Pickup: close gripper, lift, rotate, drop
-    STATE_HALTING      // Restore scanning pose and stop
+    STATE_CATCHING,    // Scoop → retract → shake → lower
+    STATE_HALTING      // Restore s0/s2 to pre-catch pose
 } SystemState;
 
 // Return human-readable state name (debug)
@@ -46,16 +47,17 @@ typedef struct {
     uint8_t lose_counter;
 
     // Current servo positions
-    int32_t cur_servo0; // -135…+135
-    uint8_t cur_servo1; // 0…180
-    uint8_t cur_servo2; // 0…180
+    int32_t cur_servo0;   // -135…+135
+    uint8_t cur_servo2;   // 0…180
+    float   cur_servo3;   // telescopic extension distance (cm), 0=retracted, 15=max
 
     // Pre-catch recorded positions
     int32_t pre_catch_servo0;
-    uint8_t pre_catch_servo1, pre_catch_servo2;
+    uint8_t pre_catch_servo2;
+    float   pre_catch_servo3;
 
     // Approach
-    uint8_t approach_step_count;
+    float   approach_target_width; // bb_width saved from CENTERED
 
     // Calibration sliding window
     float calib_cx_buf[15], calib_cy_buf[15];
@@ -64,9 +66,6 @@ typedef struct {
     // P-controller parameters
     float kp_pan, kp_tilt;        // Proportional gains
     float deadband_x, deadband_y; // |offset| below this = centred (px)
-
-    // TOF distance sensor (VL53L1X / DL1B)
-    uint16_t tof_distance_mm; // 8192 = no data yet
 } StateMachine;
 
 // Initialize state machine to defaults and STATE_INIT

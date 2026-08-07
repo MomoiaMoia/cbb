@@ -1,13 +1,14 @@
 // state_machine.c — Blueberry-picking state machine implementation
-// Servo0=pan(-135~+135), Servo1=shoulder(0~180), Servo2=tilt(0~180)
+// Servo0=pan(-135~+135), Servo2=tilt(0~180), Servo3=telescopic(0~15cm)
+// Servo1 (shoulder) fixed at 90° by hal init, not used in state machine
 // cx offset→servo0(pan), cy offset→servo2(tilt); target=(80,95) in 160x160 image
 #include "state_machine.h"
 
 #include "common_utils.h"
 #include "hal_data.h"
 #include "servos/servo0.h"
-#include "servos/servo1.h"
 #include "servos/servo2.h"
+#include "servos/servo3.h"
 #include "servos/servo_catch.h"
 
 #include <math.h>
@@ -34,7 +35,7 @@
 
 // Sliding-window size & CATCHING width threshold
 #define CALIB_WIN_SIZE 2u
-#define CATCH_WIDTH_THRESH 43.0f
+#define CATCH_WIDTH_THRESH 35.0f
 
 // Clamp helpers
 static int32_t clamp_i32(int32_t val, int32_t lo, int32_t hi) {
@@ -80,20 +81,6 @@ static void smooth_move_servo0(int32_t from, int32_t to, uint32_t step_ms) {
     }
 }
 
-static void smooth_move_servo1(uint8_t from, uint8_t to, uint32_t step_ms) {
-    if (from == to) {
-        servo1_set_angle(to);
-        return;
-    }
-    int32_t step = (to > from) ? 1 : -1;
-    int32_t a = (int32_t)from;
-    while (a != (int32_t)to) {
-        a += step;
-        servo1_set_angle((uint8_t)a);
-        delay_ms(step_ms);
-    }
-}
-
 static void smooth_move_servo2(uint8_t from, uint8_t to, uint32_t step_ms) {
     if (from == to) {
         servo2_set_angle(to);
@@ -118,29 +105,25 @@ static void prv_enter_scan_retry(StateMachine *sm) {
         smooth_move_servo2(sm->cur_servo2, 110, NORMAL_STEP_MS);
         sm->cur_servo2 = 110;
         sm->scan_angle = 110;
-        sm->scan_step = 5;
+        sm->scan_step = 3;
         sm->state = STATE_SCAN_SERVO2;
         SM_PRINT("[SM] retry=0  servo0=%ld  SCAN_SERVO2 110->50\r\n", (long)sm->cur_servo0);
         break;
 
     case 1:
-        // Reset to centre, restore servo1 vertical, vertical sweep 110→50
+        // Reset to centre, vertical sweep 110→50
         smooth_move_servo0(sm->cur_servo0, 45, NORMAL_STEP_MS);
         sm->cur_servo0 = 45;
-        smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
-        sm->cur_servo1 = 90;
         smooth_move_servo2(sm->cur_servo2, 110, NORMAL_STEP_MS);
         sm->cur_servo2 = 110;
         sm->scan_angle = 110;
-        sm->scan_step = 5;
+        sm->scan_step = 3;
         sm->state = STATE_SCAN_SERVO2;
         SM_PRINT("[SM] retry=1  servo0=45  SCAN_SERVO2 110->50\r\n");
         break;
 
     case 2:
-        // X-scan: restore servo1 vertical, start diagonal pose
-        smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
-        sm->cur_servo1 = 90;
+        // X-scan: start diagonal pose
         smooth_move_servo0(sm->cur_servo0, 0, NORMAL_STEP_MS);
         sm->cur_servo0 = 0;
         smooth_move_servo2(sm->cur_servo2, 110, NORMAL_STEP_MS);
@@ -195,23 +178,22 @@ void StateMachine_Init(StateMachine *sm) {
     sm->calib_sample_count = 0;
     sm->track_cx = 0.0f;
     sm->track_cy = 0.0f;
-    sm->approach_step_count = 0;
+    sm->approach_target_width = 0.0f;
 
     sm->lose_counter = 0;
 
     sm->scan_retry = 0;
     sm->scan_phase = 0;
 
-    sm->cur_servo0 = 45; // initial pan angle
-    sm->cur_servo1 = 90; // vertical (straight up)
-    sm->cur_servo2 = 90; // forward-facing
+    sm->cur_servo0 = 45;   // initial pan angle
+    sm->cur_servo2 = 90;   // forward-facing
+    sm->cur_servo3 = 0.0f; // telescopic retracted
 
     sm->pre_catch_servo0 = 45;
-    sm->pre_catch_servo1 = 90;
     sm->pre_catch_servo2 = 90;
+    sm->pre_catch_servo3 = 0.0f;
 
-    // KP: each pixel ≈0.56° (90° FOV/160px); kp=0.15→10px offset → 0.15°
-    sm->tof_distance_mm = 8192; // TOF no-data sentinel
+    // KP: each pixel ≈0.56° (90° FOV/160px); kp=0.20→10px offset → 2.0°
 
     sm->kp_pan = KP_PAN;
     sm->kp_tilt = KP_TILT;
@@ -223,39 +205,17 @@ void StateMachine_Init(StateMachine *sm) {
 void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
     const bool has_det = (det != NULL && det->count > 0);
 
-    // Guard: max approach steps → reset arm and rescan
-    if (sm->approach_step_count >= 7) {
-        SM_PRINT("[SM] guard: max approach steps (%u) reached — reset s1->90  s2->90\r\n",
-                 (unsigned)sm->approach_step_count);
-
-        smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
-        sm->cur_servo1 = 90;
-        smooth_move_servo2(sm->cur_servo2, 90, NORMAL_STEP_MS);
-        sm->cur_servo2 = 90;
-
-        sm->approach_step_count = 0;
-        sm->scan_retry = 0;
-        prv_enter_scan_retry(sm);
-        return;
-    }
-
-    // Guard: servo2 > 160° → roll back both s1 and s2 halfway to 90
+    // Guard: servo2 > 160° → roll back s2 halfway to 90
     if (sm->cur_servo2 > 160) {
-        int32_t s1_target = (int32_t)sm->cur_servo1 - ((int32_t)sm->cur_servo1 - 90) / 2;
         int32_t s2_target = (int32_t)sm->cur_servo2 - ((int32_t)sm->cur_servo2 - 90) / 2;
+        uint8_t clamped_s2 = clamp_u8(s2_target, 0, 180);
 
-        SM_PRINT("[SM] guard: servo2=%d > 160  rollback s1=%d->%ld  s2=%d->%ld\r\n",
-                 (int)sm->cur_servo2,
-                 (int)sm->cur_servo1, (long)s1_target,
-                 (int)sm->cur_servo2, (long)s2_target);
+        SM_PRINT("[SM] guard: servo2=%d > 160  rollback s2=%d->%d\r\n",
+                 (int)sm->cur_servo2, (int)sm->cur_servo2, (int)clamped_s2);
 
-        smooth_move_servo1(sm->cur_servo1, (uint8_t)s1_target, NORMAL_STEP_MS);
-        sm->cur_servo1 = (uint8_t)s1_target;
+        smooth_move_servo2(sm->cur_servo2, clamped_s2, NORMAL_STEP_MS);
+        sm->cur_servo2 = clamped_s2;
 
-        smooth_move_servo2(sm->cur_servo2, (uint8_t)s2_target, NORMAL_STEP_MS);
-        sm->cur_servo2 = (uint8_t)s2_target;
-
-        sm->approach_step_count = 0;
         sm->scan_retry = 0;
         prv_enter_scan_retry(sm);
         return;
@@ -265,14 +225,12 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
     // INIT: set initial scanning pose → SCAN_SERVO2
     case STATE_INIT:
         smooth_move_servo0(sm->cur_servo0, 45, NORMAL_STEP_MS);
-        smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
         smooth_move_servo2(sm->cur_servo2, 110, NORMAL_STEP_MS);
 
         sm->cur_servo0 = 45;
-        sm->cur_servo1 = 90;
         sm->cur_servo2 = 110;
         sm->scan_angle = 110;
-        sm->scan_step = 1;
+        sm->scan_step = 3;
         sm->state = STATE_SCAN_SERVO2;
         SM_PRINT("[SM] INIT -> SCAN_SERVO2 (servo2=%ld deg)\r\n", (long)sm->scan_angle);
         break;
@@ -485,7 +443,7 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             }
 
             // P-controller deltas (half-step)
-            int32_t delta_pan = (int32_t)(off_x * 0.5f * sm->kp_pan);
+            int32_t delta_pan = (int32_t)(-off_x * 0.5f * sm->kp_pan);
             int32_t delta_tilt = (int32_t)(-off_y * 0.5f * sm->kp_tilt);
 
             SM_PRINT("[SM] CALIBRATE: avg(%.1f,%.1f) off(%.1f,%.1f) dp=%ld dt=%ld\r\n",
@@ -515,7 +473,6 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
             sm->calib_buf_idx = 0;
             sm->calib_sample_count = 0;
 
-            // Servo1 remains fixed during centering
         } else {
             sm->lose_counter++;
             if (sm->lose_counter >= MAX_LOSE_FRAMES) {
@@ -570,23 +527,23 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
 
             // Check blueberry width to decide APPROACH vs CATCHING
             if (bb_width < CATCH_WIDTH_THRESH) {
-                // Too far — start approaching
-                sm->approach_step_count = 0;
+                // Too far — start approaching, save width for APPROACH
+                sm->approach_target_width = bb_width;
                 sm->state = STATE_APPROACH;
                 SM_PRINT("[SM] CENTERED -> APPROACH  width=%.1f\r\n",
                          (double)bb_width);
             } else {
                 // Width >= CATCH_WIDTH_THRESH — close enough, start pickup
                 sm->pre_catch_servo0 = sm->cur_servo0;
-                sm->pre_catch_servo1 = sm->cur_servo1;
                 sm->pre_catch_servo2 = sm->cur_servo2;
+                sm->pre_catch_servo3 = sm->cur_servo3;
                 sm->state = STATE_CATCHING;
                 SM_PRINT("[SM] CENTERED -> CATCHING  width=%.1f  "
-                         "pre(servo0=%ld, servo1=%u, servo2=%u)\r\n",
+                         "pre(servo0=%ld, servo2=%u, servo3=%.1f)\r\n",
                          (double)bb_width,
                          (long)sm->pre_catch_servo0,
-                         (unsigned)sm->pre_catch_servo1,
-                         (unsigned)sm->pre_catch_servo2);
+                         (unsigned)sm->pre_catch_servo2,
+                         (double)sm->pre_catch_servo3);
             }
         } else {
             sm->lose_counter++;
@@ -599,134 +556,85 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
         }
         break;
 
-    // APPROACH: s1 -3°, s2 +4° per step, then → CALIBRATE to re-centre
-    case STATE_APPROACH:
-        {
-            int32_t step_deg = 3;
+    // APPROACH: extend s3 by (distance - 10cm) to bring target within scoop range → CATCHING
+    case STATE_APPROACH: {
+        float dist_cm = servo3_width_to_distance(sm->approach_target_width);
+        float move_cm = dist_cm - 10.0f; // only move the excess beyond 10cm
 
-            int32_t new_s1 = (int32_t)sm->cur_servo1 - step_deg;
-            int32_t new_s2 = (int32_t)sm->cur_servo2 + step_deg + 1; // +2° extra to compensate for arm tilt
-            uint8_t clamped_s1 = clamp_u8(new_s1, 0, 180);
-            uint8_t clamped_s2 = clamp_u8(new_s2, 0, 180);
+        // Clamp move distance to [0, 15] cm
+        if (move_cm > 15.0f) move_cm = 15.0f;
+        if (move_cm < 0.0f)  move_cm = 0.0f;
 
-            SM_PRINT("[SM] APPROACH: s1 %d->%d  s2 %d->%d  step=%u  deg=%d\r\n",
-                     (int)sm->cur_servo1, (int)clamped_s1,
-                     (int)sm->cur_servo2, (int)clamped_s2,
-                     (unsigned)sm->approach_step_count + 1,
-                     step_deg);
+        SM_PRINT("[SM] APPROACH: width=%.1f -> dist=%.1fcm  move=%.1fcm\r\n",
+                 (double)sm->approach_target_width, (double)dist_cm, (double)move_cm);
 
-            smooth_move_servo1(sm->cur_servo1, clamped_s1, NORMAL_STEP_MS);
-            sm->cur_servo1 = clamped_s1;
-
-            smooth_move_servo2(sm->cur_servo2, clamped_s2, NORMAL_STEP_MS);
-            sm->cur_servo2 = clamped_s2;
-
-            delay_ms(150); // settle
-
-            sm->approach_step_count++;
-
-            // Reset sliding window for fresh frames after each move
-            sm->calib_buf_idx = 0;
-            sm->calib_sample_count = 0;
-            sm->state = STATE_CALIBRATE;
-            SM_PRINT("[SM] APPROACH -> CALIBRATE  (re-centre after step %u)\r\n",
-                     (unsigned)sm->approach_step_count);
+        if (move_cm > 0.0f) {
+            servo3_forward(move_cm);
+            sm->cur_servo3 += move_cm;
+            if (sm->cur_servo3 > 15.0f) sm->cur_servo3 = 15.0f;
+            delay_ms(200); // settle after extension
         }
+
+        // Save pre-catch snapshot
+        sm->pre_catch_servo0 = sm->cur_servo0;
+        sm->pre_catch_servo2 = sm->cur_servo2;
+        sm->pre_catch_servo3 = sm->cur_servo3;
+
+        sm->state = STATE_CATCHING;
+        SM_PRINT("[SM] APPROACH -> CATCHING  s3=%.1fcm\r\n",
+                 (double)sm->cur_servo3);
         break;
+    }
 
-    // CATCHING: pickup sequence (微张→tilt up→close gripper→lift→rotate→drop→open)
+    // CATCHING: raise → tilt up → retract → lower → HALTING
     case STATE_CATCHING: {
-        SM_PRINT("[SM] CATCHING: starting pickup sequence\r\n");
+        SM_PRINT("[SM] CATCHING: starting scoop sequence\r\n");
 
-        servo_catch_set_pulse(1300); // slightly open gripper
-        delay_ms(100);
-
-        // Tilt servo2 up before pickup to clear the target
-        {
-            uint8_t new_s2 = clamp_u8((int32_t)sm->cur_servo2 + 10, 0, 180);
-            servo2_set_angle(new_s2);
-            sm->cur_servo2 = new_s2;
-            delay_ms(100);
-        }
-
-        servo_catch_close_slow(600);
-        delay_ms(200); // wait for gripper to close
-
-        // servo1 → 100° (return to vertical)
-        smooth_move_servo1(sm->cur_servo1, 100, NORMAL_STEP_MS);
-        sm->cur_servo1 = 100;
-        delay_ms(100);
-
-        // servo2 → +20° (tilt up to clear)
-        {
-            uint8_t new_s2 = clamp_u8((int32_t)sm->cur_servo2 + 20, 0, 180);
-            smooth_move_servo2(sm->cur_servo2, new_s2, NORMAL_STEP_MS);
-            sm->cur_servo2 = new_s2;
-        }
-        delay_ms(100);
-
-        // servo0 → -45° (rotate base)
-        smooth_move_servo0(sm->cur_servo0, -45, NORMAL_STEP_MS);
-        sm->cur_servo0 = -45;
-        delay_ms(100);
-
-        // servo2 → 45° (tilt down to drop position)
-        smooth_move_servo2(sm->cur_servo2, 45, NORMAL_STEP_MS);
-        sm->cur_servo2 = 45;
-        delay_ms(100);
-
-        // servo1 → 90° (return to vertical)
-        smooth_move_servo1(sm->cur_servo1, 90, NORMAL_STEP_MS);
-        sm->cur_servo1 = 90;
-        delay_ms(100);
-
-        // servo0 → 30° (rotate to drop position)
-        smooth_move_servo0(sm->cur_servo0, 30, NORMAL_STEP_MS);
-        sm->cur_servo0 = 30;
+        // 1. Raise scoop claw
+        servo_catch_raise();
         delay_ms(200);
 
-        // Open gripper (松开夹爪放下目标)
-        servo_catch_open();
-        delay_ms(200); // wait for gripper to open
+        // 2. Tilt servo2 up to 140°
+        smooth_move_servo2(sm->cur_servo2, 140, NORMAL_STEP_MS);
+        sm->cur_servo2 = 140;
+        delay_ms(300);
 
-        SM_PRINT("[SM] CATCHING: pickup complete  -> HALTING\r\n");
+        // 3. Fully retract telescopic arm
+        SM_PRINT("[SM] CATCHING: retract servo3 %.1fcm -> 0\r\n",
+                 (double)sm->cur_servo3);
+        servo3_backward(sm->cur_servo3);
+        sm->cur_servo3 = 0.0f;
+        delay_ms(1000);
+
+        // 4. Lower scoop claw
+        servo_catch_lower();
+
+        SM_PRINT("[SM] CATCHING: scoop complete -> HALTING\r\n");
         sm->state = STATE_HALTING;
         break;
     }
 
-    // HALTING: restore arm to scanning pose based on pre-catch snapshot → SCAN_SERVO2
+    // HALTING: restore s0 and s2 to pre-catch pose → SCAN_SERVO2
     case STATE_HALTING: {
-        // s1 halfway back toward 90°, s2 tilt down by same delta
-        int32_t s1_delta = ((int32_t)90 - sm->pre_catch_servo1) * 2 / 3;
-        int32_t s1_target = (int32_t)sm->pre_catch_servo1 + s1_delta;
-        int32_t s2_raw = (int32_t)sm->pre_catch_servo2 - s1_delta; // s2 decreases by same amount
-        uint8_t s2_target = clamp_u8(s2_raw, 0, 180);
-
-        SM_PRINT("[SM] HALTING: pre(servo0=%ld, servo1=%u, servo2=%u)  "
-                 "s1_target=%ld  s2_target=%d\r\n",
+        SM_PRINT("[SM] HALTING: pre(servo0=%ld, servo2=%u)\r\n",
                  (long)sm->pre_catch_servo0,
-                 (unsigned)sm->pre_catch_servo1,
-                 (unsigned)sm->pre_catch_servo2,
-                 (long)s1_target, (int)s2_target);
+                 (unsigned)sm->pre_catch_servo2);
 
         // Restore servo0 to pre-catch angle
         smooth_move_servo0(sm->cur_servo0, sm->pre_catch_servo0, NORMAL_STEP_MS);
         sm->cur_servo0 = sm->pre_catch_servo0;
 
-        // Restore arm to scanning pose
-        smooth_move_servo1(sm->cur_servo1, (uint8_t)s1_target, NORMAL_STEP_MS);
-        sm->cur_servo1 = (uint8_t)s1_target;
-
-        smooth_move_servo2(sm->cur_servo2, s2_target, NORMAL_STEP_MS);
-        sm->cur_servo2 = s2_target;
+        // Restore servo2 to pre-catch angle
+        smooth_move_servo2(sm->cur_servo2, sm->pre_catch_servo2, NORMAL_STEP_MS);
+        sm->cur_servo2 = sm->pre_catch_servo2;
 
         delay_ms(500);
 
-        SM_PRINT("[SM] HALTING: scanning pose reached -> SCAN_SERVO2\r\n");
+        SM_PRINT("[SM] HALTING: pose restored -> SCAN_SERVO2\r\n");
 
         // Resume scanning from current servo2 position
         sm->scan_angle = (int32_t)sm->cur_servo2;
-        sm->scan_step = 1;
+        sm->scan_step = 3;
         sm->scan_retry = 0;
         sm->state = STATE_SCAN_SERVO2;
         break;
