@@ -1,4 +1,5 @@
 #include "servo3.h"
+#include "zf_device_dl1b.h"
 
 #define PULSE_US(us) ((uint32_t)((uint64_t)(us) * 300))
 
@@ -61,4 +62,66 @@ float servo3_width_to_distance(float width_pixels)
         return 0.0f;
     }
     return WIDTH_TO_DIST_COEFF / width_pixels;
+}
+
+#define BACKTOBASE_THRESH_MM 40  // 4cm
+#define BACKTOBASE_MAX_RETRIES 2
+
+// Piecewise TOF distance calibration
+static uint16_t calibrate_tof(uint16_t raw_mm)
+{
+    if (raw_mm <= 60)
+    {
+        return raw_mm;
+    }
+    else if (raw_mm <= 100)
+    {
+        return raw_mm - 10;
+    }
+    else if (raw_mm <= 200)
+    {
+        return raw_mm - 20;
+    }
+    return raw_mm;
+}
+
+float servo3_backtobase(float distance_cm)
+{
+    // 1. Initial retraction
+    if (distance_cm > 0.0f)
+    {
+        servo3_backward(distance_cm);
+    }
+
+    uint16_t calibrated = 0;
+
+    for (int retry = 0; retry < BACKTOBASE_MAX_RETRIES; retry++)
+    {
+        // Poll DL1B until a new reading arrives
+        dl1b_finsh_flag = 0;
+        while (!dl1b_finsh_flag)
+        {
+            // busy-wait for TOF measurement
+        }
+        dl1b_finsh_flag = 0;
+
+        calibrated = calibrate_tof(dl1b_distance_mm);
+
+        // Within threshold → done
+        if (calibrated < BACKTOBASE_THRESH_MM)
+        {
+            return 0.0f;
+        }
+
+        // Still too far — retract the excess
+        float excess_cm = (float)(calibrated - BACKTOBASE_THRESH_MM) / 10.0f;
+        servo3_backward(excess_cm);
+    }
+
+    // Final check after all retries
+    if (calibrated < BACKTOBASE_THRESH_MM)
+    {
+        return 0.0f;
+    }
+    return (float)(calibrated - BACKTOBASE_THRESH_MM) / 10.0f;
 }

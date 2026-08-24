@@ -599,12 +599,13 @@ void StateMachine_Step(StateMachine *sm, const YoloDetectionResult *det) {
         sm->cur_servo2 = 140;
         delay_ms(300);
 
-        // 3. Fully retract telescopic arm
-        SM_PRINT("[SM] CATCHING: retract servo3 %.1fcm -> 0\r\n",
-                 (double)sm->cur_servo3);
-        servo3_backward(sm->cur_servo3);
-        sm->cur_servo3 = 0.0f;
-        delay_ms(1000);
+        // 3. Retract telescopic arm to base (DL1B-guided)
+        {
+            float leftover = servo3_backtobase(sm->cur_servo3);
+            sm->cur_servo3 = leftover;
+            SM_PRINT("[SM] CATCHING: backtobase done  leftover=%.1fcm\r\n",
+                     (double)leftover);
+        }
 
         // 4. Lower scoop claw
         servo_catch_lower();

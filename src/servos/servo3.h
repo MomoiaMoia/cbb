@@ -13,4 +13,9 @@ fsp_err_t servo3_backward(float distance_cm);
 // Returns 0 if width <= 0
 float servo3_width_to_distance(float width_pixels);
 
+// Retract toward base using DL1B feedback: backward(distance), then poll
+// DL1B up to 2× to close the gap to 4cm threshold.
+// Returns 0 if final reading < 4cm, else returns (reading_mm - 40) / 10.0f
+float servo3_backtobase(float distance_cm);
+
 #endif

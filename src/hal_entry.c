@@ -98,20 +98,20 @@ void hal_entry(void)
         R_BSP_SoftwareDelay(500, BSP_DELAY_UNITS_MILLISECONDS);
     }
 
-    // [TEMP DISABLED] DL1B (VL53L1X) TOF distance sensor
-    // {
-    //     uint8_t dl1b_retry = 0;
-    //     while (1) {
-    //         if (!dl1b_init()) {
-    //             printf("[TOF] DL1B init success.\r\n");
-    //             break;
-    //         }
-    //         dl1b_retry++;
-    //         printf("[TOF] DL1B init failed (retry %u), retrying...\r\n",
-    //                (unsigned)dl1b_retry);
-    //         R_BSP_SoftwareDelay(500, BSP_DELAY_UNITS_MILLISECONDS);
-    //     }
-    // }
+    // Init DL1B TOF distance sensor (soft IIC + interrupt)
+    {
+        uint8_t dl1b_retry = 0;
+        while (1) {
+            if (!dl1b_init()) {
+                printf("[TOF] DL1B init success.\r\n");
+                break;
+            }
+            dl1b_retry++;
+            printf("[TOF] DL1B init failed (retry %u), retrying...\r\n",
+                   (unsigned)dl1b_retry);
+            R_BSP_SoftwareDelay(500, BSP_DELAY_UNITS_MILLISECONDS);
+        }
+    }
 
     // Init IPS200 display (landscape 320x240)
     ips200_set_dir(IPS200_CROSSWISE);
@@ -207,13 +207,6 @@ void hal_entry(void)
             ips200_show_string(242, 36, "Score:");
             ips200_show_float(242, 52, det_result->detections[0].score, 1, 3);
         }
-
-        // [TEMP DISABLED] TOF distance — fixed at 0
-        // if (dl1b_finsh_flag) {
-        //     dl1b_finsh_flag = false;
-        //     g_state_machine.tof_distance_mm = (dl1b_distance_mm >= 25) ? (dl1b_distance_mm - 25) : 0;
-        // }
-        // g_state_machine.tof_distance_mm = 0;
 
         // RF433 remote signal check
         int rf433_signal = rf433_scan707();
